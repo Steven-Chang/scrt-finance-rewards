@@ -11,7 +11,8 @@ pub struct State {
     pub admin: HumanAddr,
     pub gov_token_addr: HumanAddr,
     pub gov_token_hash: String,
-    pub total_alloc_points: u128,
+    pub total_weight: u64,
+    pub minting_schedule: Schedule,
 }
 
 pub fn config<S: Storage>(storage: &mut S) -> Singleton<S, State> {
@@ -24,7 +25,17 @@ pub fn config_read<S: Storage>(storage: &S) -> ReadonlySingleton<S, State> {
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct RewardContract {
-    pub alloc_points: u128,
+    pub weight: u64,
     pub last_update_block: u64,
-    pub eligible_for: u128,
+    // pub eligible_for: u128,
 }
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+pub struct ScheduleUnit {
+    pub end_block: u64,
+    pub mint_per_block: u128,
+}
+
+// #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+pub type Schedule = Vec<ScheduleUnit>;
+// pub struct Schedule(pub Vec<ScheduleUnit>);
