@@ -4,8 +4,9 @@ use cosmwasm_std::{
 };
 
 use crate::msg::CallbackMsg::NotifyAllocation;
+use crate::msg::HandleMsg::{SetSchedule, SetWeights};
 use crate::msg::{HandleAnswer, HandleMsg, InitMsg, QueryMsg, WeightInfo};
-use crate::state::{config, config_read, RewardContract, Schedule, State};
+use crate::state::{config, config_read, sort_schedule, RewardContract, Schedule, State};
 use secret_toolkit::snip20;
 use secret_toolkit::storage::TypedStoreMut;
 
@@ -14,12 +15,16 @@ pub fn init<S: Storage, A: Api, Q: Querier>(
     env: Env,
     msg: InitMsg,
 ) -> StdResult<InitResponse> {
+    // The impl. later on relies on the schedule being sorted
+    let mut mint_schedule = msg.minting_schedule;
+    sort_schedule(&mut mint_schedule);
+
     let state = State {
         admin: env.message.sender,
         gov_token_addr: msg.gov_token_addr,
         gov_token_hash: msg.gov_token_hash,
         total_weight: 0,
-        minting_schedule: msg.minting_schedule,
+        minting_schedule: mint_schedule,
     };
 
     config(&mut deps.storage).save(&state)?;
@@ -33,6 +38,8 @@ pub fn handle<S: Storage, A: Api, Q: Querier>(
     msg: HandleMsg,
 ) -> StdResult<HandleResponse> {
     match msg {
+        SetWeights { weights } => set_weights(deps, env, weights),
+        SetSchedule { schedule } => set_schedule(deps, env, schedule),
         _ => Ok(HandleResponse {
             messages: vec![],
             log: vec![],
@@ -41,12 +48,37 @@ pub fn handle<S: Storage, A: Api, Q: Querier>(
     }
 }
 
+fn set_schedule<S: Storage, A: Api, Q: Querier>(
+    deps: &mut Extern<S, A, Q>,
+    env: Env,
+    schedule: Schedule,
+) -> StdResult<HandleResponse> {
+    let mut st = config(&mut deps.storage);
+    let mut state = st.load()?;
+
+    // TODO: Check admin
+
+    let mut s = schedule;
+    sort_schedule(&mut s);
+
+    state.minting_schedule = s;
+    st.save(&state)?;
+
+    Ok(HandleResponse {
+        messages: vec![],
+        log: vec![],
+        data: Some(to_binary(&HandleAnswer::Success)?),
+    })
+}
+
 fn set_weights<S: Storage, A: Api, Q: Querier>(
     deps: &mut Extern<S, A, Q>,
     env: Env,
     weights: Vec<WeightInfo>,
 ) -> StdResult<HandleResponse> {
     let mut state = config_read(&deps.storage).load()?;
+
+    // TODO: Check admin
 
     let mut messages = vec![];
     let mut logs = vec![];

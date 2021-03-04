@@ -30,12 +30,14 @@ pub struct RewardContract {
     // pub eligible_for: u128,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema, Copy)]
 pub struct ScheduleUnit {
     pub end_block: u64,
     pub mint_per_block: u128,
 }
 
-// #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub type Schedule = Vec<ScheduleUnit>;
-// pub struct Schedule(pub Vec<ScheduleUnit>);
+
+pub fn sort_schedule(s: &mut Schedule) {
+    s.sort_by(|&s1, &s2| s1.end_block.cmp(&s2.end_block))
+}
