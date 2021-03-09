@@ -1,12 +1,12 @@
 use cosmwasm_std::{
-    log, to_binary, Api, Binary, Env, Extern, HandleResponse, InitResponse, Querier, StdError,
+    log, to_binary, Api, Binary, Env, Extern, HandleResponse, HumanAddr, InitResponse, Querier,
     StdResult, Storage, Uint128, WasmMsg,
 };
 
 use crate::msg::CallbackMsg::NotifyAllocation;
-use crate::msg::HandleMsg::{SetSchedule, SetWeights};
+use crate::msg::HandleMsg::{SetSchedule, SetWeights, UpdateAllocation};
 use crate::msg::{HandleAnswer, HandleMsg, InitMsg, QueryMsg, WeightInfo};
-use crate::state::{config, config_read, sort_schedule, RewardContract, Schedule, State};
+use crate::state::{config, config_read, sort_schedule, Schedule, SpySettings, State};
 use secret_toolkit::snip20;
 use secret_toolkit::storage::TypedStoreMut;
 
@@ -38,6 +38,11 @@ pub fn handle<S: Storage, A: Api, Q: Querier>(
     msg: HandleMsg,
 ) -> StdResult<HandleResponse> {
     match msg {
+        UpdateAllocation {
+            spy_addr,
+            spy_hash,
+            hook,
+        } => update_allocation(deps, env, spy_addr, spy_hash, hook),
         SetWeights { weights } => set_weights(deps, env, weights),
         SetSchedule { schedule } => set_schedule(deps, env, schedule),
         _ => Ok(HandleResponse {
@@ -88,20 +93,20 @@ fn set_weights<S: Storage, A: Api, Q: Querier>(
     // Update reward contracts one by one
     for to_update in weights {
         let mut rs = TypedStoreMut::attach(&mut deps.storage);
-        let mut reward_contract =
+        let mut spy_settings =
             rs.load(to_update.address.clone().0.as_bytes())
-                .unwrap_or(RewardContract {
+                .unwrap_or(SpySettings {
                     weight: 0,
                     last_update_block: env.block.height.clone(),
                 });
 
-        if reward_contract.last_update_block < env.block.height {
-            // Calc amount to mint for this reward contract and push to messages
+        if spy_settings.last_update_block < env.block.height && spy_settings.weight > 0 {
+            // Calc amount to mint for this spy contract and push to messages
             let rewards = get_spy_rewards(
                 env.block.height,
                 state.total_weight,
                 &state.minting_schedule,
-                reward_contract.clone(),
+                spy_settings.clone(),
             );
             messages.push(snip20::mint_msg(
                 to_update.address.clone(),
@@ -127,13 +132,13 @@ fn set_weights<S: Storage, A: Api, Q: Querier>(
             );
         }
 
-        let old_weight = reward_contract.weight;
+        let old_weight = spy_settings.weight;
         let new_weight = to_update.weight;
 
         // Set new weight and update total counter
-        reward_contract.weight = new_weight;
-        reward_contract.last_update_block = env.block.height;
-        rs.store(to_update.address.0.as_bytes(), &reward_contract)?;
+        spy_settings.weight = new_weight;
+        spy_settings.last_update_block = env.block.height;
+        rs.store(to_update.address.0.as_bytes(), &spy_settings)?;
 
         // Update counters to batch update after the loop
         new_weight_counter += new_weight;
@@ -143,11 +148,72 @@ fn set_weights<S: Storage, A: Api, Q: Querier>(
     }
 
     state.total_weight = state.total_weight - old_weight_counter + new_weight_counter;
-    config(&mut deps.storage).save(&state);
+    config(&mut deps.storage).save(&state)?;
 
     Ok(HandleResponse {
         messages,
         log: logs,
+        data: Some(to_binary(&HandleAnswer::Success)?),
+    })
+}
+
+fn update_allocation<S: Storage, A: Api, Q: Querier>(
+    deps: &mut Extern<S, A, Q>,
+    env: Env,
+    spy_address: HumanAddr,
+    spy_hash: String,
+    hook: Option<Binary>,
+) -> StdResult<HandleResponse> {
+    let state = config_read(&deps.storage).load()?;
+
+    let mut rs = TypedStoreMut::attach(&mut deps.storage);
+    let mut spy_settings = rs
+        .load(spy_address.clone().0.as_bytes())
+        .unwrap_or(SpySettings {
+            weight: 0,
+            last_update_block: env.block.height.clone(),
+        });
+
+    let mut rewards = 0;
+    let mut messages = vec![];
+    if spy_settings.last_update_block < env.block.height && spy_settings.weight > 0 {
+        // Calc amount to mint for this spy contract and push to messages
+        rewards = get_spy_rewards(
+            env.block.height,
+            state.total_weight,
+            &state.minting_schedule,
+            spy_settings.clone(),
+        );
+        messages.push(snip20::mint_msg(
+            spy_address.clone(),
+            Uint128(rewards),
+            None,
+            1,
+            state.gov_token_hash.clone(),
+            state.gov_token_addr.clone(),
+        )?);
+
+        spy_settings.last_update_block = env.block.height;
+        rs.store(spy_address.0.as_bytes(), &spy_settings)?;
+    }
+
+    // Notify to the spy contract on the new allocation
+    messages.push(
+        WasmMsg::Execute {
+            contract_addr: spy_address.clone(),
+            callback_code_hash: spy_hash,
+            msg: to_binary(&NotifyAllocation {
+                amount: Uint128(rewards),
+                hook,
+            })?,
+            send: vec![],
+        }
+        .into(),
+    );
+
+    Ok(HandleResponse {
+        messages,
+        log: vec![log("update_allocation", spy_address.0)],
         data: Some(to_binary(&HandleAnswer::Success)?),
     })
 }
@@ -165,9 +231,9 @@ fn get_spy_rewards(
     current_block: u64,
     total_weight: u64,
     schedule: &Schedule,
-    reward_contract: RewardContract,
+    spy_settings: SpySettings,
 ) -> u128 {
-    let mut last_update_block = reward_contract.last_update_block;
+    let mut last_update_block = spy_settings.last_update_block;
 
     let mut multiplier = 0;
     // Going serially assuming that schedule is not a big vector
@@ -184,7 +250,7 @@ fn get_spy_rewards(
         }
     }
 
-    (multiplier * reward_contract.weight as u128) / total_weight as u128
+    (multiplier * spy_settings.weight as u128) / total_weight as u128
 }
 
 #[cfg(test)]

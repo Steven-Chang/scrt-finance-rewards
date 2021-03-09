@@ -13,15 +13,26 @@ pub struct InitMsg {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum HandleMsg {
-    // Callbacks
-    // MintFor { address: HumanAddr, amount: Uint128 },
-    MintAllocation {},
+    UpdateAllocation {
+        spy_addr: HumanAddr,
+        spy_hash: String,
+        hook: Option<Binary>,
+    },
 
     // Admin commands
-    SetWeights { weights: Vec<WeightInfo> },
-    SetSchedule { schedule: Schedule },
-    SetGovToken { addr: HumanAddr, hash: String },
-    ChangeAdmin { addr: HumanAddr },
+    SetWeights {
+        weights: Vec<WeightInfo>,
+    },
+    SetSchedule {
+        schedule: Schedule,
+    },
+    SetGovToken {
+        addr: HumanAddr,
+        hash: String,
+    },
+    ChangeAdmin {
+        addr: HumanAddr,
+    },
 }
 
 #[derive(Serialize, Deserialize, JsonSchema, Debug)]
@@ -52,9 +63,3 @@ pub struct WeightInfo {
     pub hash: String,
     pub weight: u64,
 }
-
-// // We define a custom struct for each query response
-// #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
-// pub struct CountResponse {
-//     pub count: i32,
-// }

@@ -24,10 +24,9 @@ pub fn config_read<S: Storage>(storage: &S) -> ReadonlySingleton<S, State> {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
-pub struct RewardContract {
+pub struct SpySettings {
     pub weight: u64,
     pub last_update_block: u64,
-    // pub eligible_for: u128,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema, Copy)]
