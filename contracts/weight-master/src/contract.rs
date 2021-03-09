@@ -4,7 +4,7 @@ use cosmwasm_std::{
 };
 
 use crate::msg::CallbackMsg::NotifyAllocation;
-use crate::msg::HandleMsg::{SetSchedule, SetWeights, UpdateAllocation};
+use crate::msg::HandleMsg::{SetGovToken, SetSchedule, SetWeights, UpdateAllocation};
 use crate::msg::{HandleAnswer, HandleMsg, InitMsg, QueryMsg, WeightInfo};
 use crate::state::{config, config_read, sort_schedule, Schedule, SpySettings, State};
 use secret_toolkit::snip20;
@@ -45,6 +45,7 @@ pub fn handle<S: Storage, A: Api, Q: Querier>(
         } => update_allocation(deps, env, spy_addr, spy_hash, hook),
         SetWeights { weights } => set_weights(deps, env, weights),
         SetSchedule { schedule } => set_schedule(deps, env, schedule),
+        SetGovToken { addr, hash } => set_gov_token(deps, env, addr, hash),
         _ => Ok(HandleResponse {
             messages: vec![],
             log: vec![],
@@ -214,6 +215,28 @@ fn update_allocation<S: Storage, A: Api, Q: Querier>(
     Ok(HandleResponse {
         messages,
         log: vec![log("update_allocation", spy_address.0)],
+        data: Some(to_binary(&HandleAnswer::Success)?),
+    })
+}
+
+fn set_gov_token<S: Storage, A: Api, Q: Querier>(
+    deps: &mut Extern<S, A, Q>,
+    env: Env,
+    gov_addr: HumanAddr,
+    gov_hash: String,
+) -> StdResult<HandleResponse> {
+    let mut state = config_read(&deps.storage).load()?;
+
+    // TODO: Check admin
+
+    state.gov_token_addr = gov_addr.clone();
+    state.gov_token_hash = gov_hash;
+
+    config(&mut deps.storage).save(&state)?;
+
+    Ok(HandleResponse {
+        messages: vec![],
+        log: vec![log("set_gov_token", gov_addr.0)],
         data: Some(to_binary(&HandleAnswer::Success)?),
     })
 }
