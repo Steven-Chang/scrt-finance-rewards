@@ -4,11 +4,10 @@ use cosmwasm_std::{
 };
 
 use crate::msg::CallbackMsg::NotifyAllocation;
-use crate::msg::HandleMsg::*;
-use crate::msg::{HandleAnswer, HandleMsg, InitMsg, QueryMsg, WeightInfo};
+use crate::msg::{HandleAnswer, HandleMsg, InitMsg, QueryAnswer, QueryMsg, WeightInfo};
 use crate::state::{config, config_read, sort_schedule, Schedule, SpySettings, State};
 use secret_toolkit::snip20;
-use secret_toolkit::storage::TypedStoreMut;
+use secret_toolkit::storage::{TypedStore, TypedStoreMut};
 
 pub fn init<S: Storage, A: Api, Q: Querier>(
     deps: &mut Extern<S, A, Q>,
@@ -38,15 +37,15 @@ pub fn handle<S: Storage, A: Api, Q: Querier>(
     msg: HandleMsg,
 ) -> StdResult<HandleResponse> {
     match msg {
-        UpdateAllocation {
+        HandleMsg::UpdateAllocation {
             spy_addr,
             spy_hash,
             hook,
         } => update_allocation(deps, env, spy_addr, spy_hash, hook),
-        SetWeights { weights } => set_weights(deps, env, weights),
-        SetSchedule { schedule } => set_schedule(deps, env, schedule),
-        SetGovToken { addr, hash } => set_gov_token(deps, env, addr, hash),
-        ChangeAdmin { addr } => change_admin(deps, env, addr),
+        HandleMsg::SetWeights { weights } => set_weights(deps, env, weights),
+        HandleMsg::SetSchedule { schedule } => set_schedule(deps, env, schedule),
+        HandleMsg::SetGovToken { addr, hash } => set_gov_token(deps, env, addr, hash),
+        HandleMsg::ChangeAdmin { addr } => change_admin(deps, env, addr),
     }
 }
 
@@ -97,6 +96,8 @@ fn set_weights<S: Storage, A: Api, Q: Querier>(
                     last_update_block: env.block.height.clone(),
                 });
 
+        // There is no need to update a SPY twice in a block, and there is no need to update a SPY
+        // that had 0 weight until now
         if spy_settings.last_update_block < env.block.height && spy_settings.weight > 0 {
             // Calc amount to mint for this spy contract and push to messages
             let rewards = get_spy_rewards(
@@ -262,8 +263,54 @@ pub fn query<S: Storage, A: Api, Q: Querier>(
     msg: QueryMsg,
 ) -> StdResult<Binary> {
     match msg {
-        _ => Ok(Binary(vec![])),
+        QueryMsg::Admin {} => to_binary(&query_admin(deps)?),
+        QueryMsg::GovToken {} => to_binary(&query_gov_token(deps)?),
+        QueryMsg::Schedule {} => to_binary(&query_schedule(deps)?),
+        QueryMsg::SpyWeight { addr } => to_binary(&query_spy_weight(deps, addr)?),
     }
+}
+
+fn query_admin<S: Storage, A: Api, Q: Querier>(deps: &Extern<S, A, Q>) -> StdResult<QueryAnswer> {
+    let state = config_read(&deps.storage).load()?;
+
+    Ok(QueryAnswer::Admin {
+        address: state.admin,
+    })
+}
+
+fn query_gov_token<S: Storage, A: Api, Q: Querier>(
+    deps: &Extern<S, A, Q>,
+) -> StdResult<QueryAnswer> {
+    let state = config_read(&deps.storage).load()?;
+
+    Ok(QueryAnswer::GovToken {
+        token_addr: state.gov_token_addr,
+        token_hash: state.gov_token_hash,
+    })
+}
+
+fn query_schedule<S: Storage, A: Api, Q: Querier>(
+    deps: &Extern<S, A, Q>,
+) -> StdResult<QueryAnswer> {
+    let state = config_read(&deps.storage).load()?;
+
+    Ok(QueryAnswer::Schedule {
+        schedule: state.minting_schedule,
+    })
+}
+
+fn query_spy_weight<S: Storage, A: Api, Q: Querier>(
+    deps: &Extern<S, A, Q>,
+    spy_address: HumanAddr,
+) -> StdResult<QueryAnswer> {
+    let spy = TypedStore::attach(&deps.storage)
+        .load(spy_address.0.as_bytes())
+        .unwrap_or(SpySettings {
+            weight: 0,
+            last_update_block: 0,
+        });
+
+    Ok(QueryAnswer::SpyWeight { weight: spy.weight })
 }
 
 fn get_spy_rewards(

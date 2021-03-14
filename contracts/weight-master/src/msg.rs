@@ -45,7 +45,28 @@ pub enum HandleAnswer {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum QueryMsg {
-    GetAllocation {},
+    Admin {},
+    GovToken {},
+    Schedule {},
+    SpyWeight { addr: HumanAddr },
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum QueryAnswer {
+    Admin {
+        address: HumanAddr,
+    },
+    GovToken {
+        token_addr: HumanAddr,
+        token_hash: String,
+    },
+    Schedule {
+        schedule: Schedule,
+    },
+    SpyWeight {
+        weight: u64,
+    },
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
