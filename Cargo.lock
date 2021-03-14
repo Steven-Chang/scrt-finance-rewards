@@ -670,6 +670,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "scrt-finance"
+version = "0.1.0"
+dependencies = [
+ "cosmwasm-std 0.10.0 (git+https://github.com/enigmampc/SecretNetwork?rev=004c6bc)",
+ "cosmwasm-storage 0.10.0 (git+https://github.com/enigmampc/SecretNetwork?rev=004c6bc)",
+ "schemars",
+ "secret-toolkit 0.1.0 (git+https://github.com/enigmampc/secret-toolkit?branch=debug-print)",
+ "serde",
+ "snafu",
+]
+
+[[package]]
 name = "secret-toolkit"
 version = "0.1.0"
 source = "git+https://github.com/enigmampc/secret-toolkit?branch=debug-print#e960c64971d5f3cfe33114b3d80b0b0aa46cf963"
@@ -1064,6 +1076,7 @@ dependencies = [
  "cosmwasm-std 0.10.0 (git+https://github.com/enigmampc/SecretNetwork?rev=004c6bc)",
  "cosmwasm-storage 0.10.0 (git+https://github.com/enigmampc/SecretNetwork?rev=004c6bc)",
  "schemars",
+ "scrt-finance",
  "secret-toolkit 0.1.0 (git+https://github.com/enigmampc/secret-toolkit?branch=debug-print)",
  "serde",
  "snafu",

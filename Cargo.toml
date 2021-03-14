@@ -1,5 +1,5 @@
 [workspace]
-members = ["contracts/*"]
+members = ["packages/*","contracts/*"]
 
 #[profile.release.package.scrtfinancerewards]
 #opt-level = 3

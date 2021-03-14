@@ -70,15 +70,6 @@ pub enum QueryAnswer {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
-#[serde(rename_all = "snake_case")]
-pub enum CallbackMsg {
-    NotifyAllocation {
-        amount: Uint128,
-        hook: Option<Binary>,
-    },
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct WeightInfo {
     pub address: HumanAddr,
     pub hash: String,

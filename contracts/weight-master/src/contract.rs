@@ -3,9 +3,9 @@ use cosmwasm_std::{
     StdError, StdResult, Storage, Uint128, WasmMsg,
 };
 
-use crate::msg::CallbackMsg::NotifyAllocation;
 use crate::msg::{HandleAnswer, HandleMsg, InitMsg, QueryAnswer, QueryMsg, WeightInfo};
 use crate::state::{config, config_read, sort_schedule, Schedule, SpySettings, State};
+use scrt_finance::callbacks::CallbackMsg::NotifyAllocation;
 use secret_toolkit::snip20;
 use secret_toolkit::storage::{TypedStore, TypedStoreMut};
 
