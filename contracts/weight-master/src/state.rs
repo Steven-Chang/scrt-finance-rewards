@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 
 use cosmwasm_std::{HumanAddr, Storage};
 use cosmwasm_storage::{singleton, singleton_read, ReadonlySingleton, Singleton};
+use scrt_finance::master_types::Schedule;
 
 pub static CONFIG_KEY: &[u8] = b"config";
 
@@ -21,22 +22,4 @@ pub fn config<S: Storage>(storage: &mut S) -> Singleton<S, State> {
 
 pub fn config_read<S: Storage>(storage: &S) -> ReadonlySingleton<S, State> {
     singleton_read(storage, CONFIG_KEY)
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
-pub struct SpySettings {
-    pub weight: u64,
-    pub last_update_block: u64,
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema, Copy)]
-pub struct ScheduleUnit {
-    pub end_block: u64,
-    pub mint_per_block: u128,
-}
-
-pub type Schedule = Vec<ScheduleUnit>;
-
-pub fn sort_schedule(s: &mut Schedule) {
-    s.sort_by(|&s1, &s2| s1.end_block.cmp(&s2.end_block))
 }

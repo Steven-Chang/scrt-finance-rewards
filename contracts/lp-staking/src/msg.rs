@@ -14,44 +14,6 @@ pub struct InitMsg {
     pub prng_seed: Binary,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
-#[serde(rename_all = "snake_case")]
-pub enum HandleMsg {
-    Redeem {
-        amount: Option<Uint128>,
-    },
-    CreateViewingKey {
-        entropy: String,
-        padding: Option<String>,
-    },
-    SetViewingKey {
-        key: String,
-        padding: Option<String>,
-    },
-    EmergencyRedeem {},
-
-    // Registered commands
-    Receive {
-        sender: HumanAddr,
-        from: HumanAddr,
-        amount: Uint128,
-        msg: Binary,
-    },
-
-    // Admin commands
-    SetDeadline {
-        block: u64,
-    },
-    ClaimRewardPool {
-        to: Option<HumanAddr>,
-    },
-    StopContract {},
-    ResumeContract {},
-    ChangeAdmin {
-        address: HumanAddr,
-    },
-}
-
 #[derive(Serialize, Deserialize, JsonSchema, Debug)]
 #[serde(rename_all = "snake_case")]
 pub enum HandleAnswer {

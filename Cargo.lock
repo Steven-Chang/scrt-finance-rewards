@@ -180,15 +180,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "cosmwasm-schema"
-version = "0.10.0"
-source = "git+https://github.com/enigmampc/SecretNetwork?tag=v1.0.0#490fba9243e6cb291462e9d3c1bcbd1975c0df1e"
-dependencies = [
- "schemars",
- "serde_json",
-]
-
-[[package]]
 name = "cosmwasm-sgx-vm"
 version = "0.10.0"
 source = "git+https://github.com/enigmampc/SecretNetwork?tag=v1.0.0#490fba9243e6cb291462e9d3c1bcbd1975c0df1e"
@@ -232,15 +223,6 @@ dependencies = [
  "serde",
  "serde-json-wasm",
  "snafu",
-]
-
-[[package]]
-name = "cosmwasm-storage"
-version = "0.10.0"
-source = "git+https://github.com/enigmampc/SecretNetwork?tag=v1.0.0#490fba9243e6cb291462e9d3c1bcbd1975c0df1e"
-dependencies = [
- "cosmwasm-std 0.10.0 (git+https://github.com/enigmampc/SecretNetwork?tag=v1.0.0)",
- "serde",
 ]
 
 [[package]]
@@ -447,12 +429,12 @@ name = "lockup-incentives"
 version = "0.1.0"
 dependencies = [
  "base64 0.12.3",
- "cosmwasm-schema 0.10.0",
- "cosmwasm-std 0.10.0 (git+https://github.com/enigmampc/SecretNetwork?tag=v1.0.0)",
- "cosmwasm-storage 0.10.0 (git+https://github.com/enigmampc/SecretNetwork?tag=v1.0.0)",
+ "cosmwasm-std 0.10.0 (git+https://github.com/enigmampc/SecretNetwork?rev=004c6bc)",
+ "cosmwasm-storage",
  "rand 0.7.3",
  "schemars",
- "secret-toolkit 0.1.0 (git+https://github.com/enigmampc/secret-toolkit)",
+ "scrt-finance",
+ "secret-toolkit",
  "serde",
  "snafu",
  "subtle 2.4.0",
@@ -674,9 +656,9 @@ name = "scrt-finance"
 version = "0.1.0"
 dependencies = [
  "cosmwasm-std 0.10.0 (git+https://github.com/enigmampc/SecretNetwork?rev=004c6bc)",
- "cosmwasm-storage 0.10.0 (git+https://github.com/enigmampc/SecretNetwork?rev=004c6bc)",
+ "cosmwasm-storage",
  "schemars",
- "secret-toolkit 0.1.0 (git+https://github.com/enigmampc/secret-toolkit?branch=debug-print)",
+ "secret-toolkit",
  "serde",
  "snafu",
 ]
@@ -686,23 +668,11 @@ name = "secret-toolkit"
 version = "0.1.0"
 source = "git+https://github.com/enigmampc/secret-toolkit?branch=debug-print#e960c64971d5f3cfe33114b3d80b0b0aa46cf963"
 dependencies = [
- "secret-toolkit-crypto 0.1.0 (git+https://github.com/enigmampc/secret-toolkit?branch=debug-print)",
- "secret-toolkit-serialization 0.1.0 (git+https://github.com/enigmampc/secret-toolkit?branch=debug-print)",
- "secret-toolkit-snip20 0.1.0 (git+https://github.com/enigmampc/secret-toolkit?branch=debug-print)",
- "secret-toolkit-storage 0.1.0 (git+https://github.com/enigmampc/secret-toolkit?branch=debug-print)",
- "secret-toolkit-utils 0.1.0 (git+https://github.com/enigmampc/secret-toolkit?branch=debug-print)",
-]
-
-[[package]]
-name = "secret-toolkit"
-version = "0.1.0"
-source = "git+https://github.com/enigmampc/secret-toolkit#1faf60a45ece9b4dc7c635786259f731405b4f76"
-dependencies = [
- "secret-toolkit-crypto 0.1.0 (git+https://github.com/enigmampc/secret-toolkit)",
- "secret-toolkit-serialization 0.1.0 (git+https://github.com/enigmampc/secret-toolkit)",
- "secret-toolkit-snip20 0.1.0 (git+https://github.com/enigmampc/secret-toolkit)",
- "secret-toolkit-storage 0.1.0 (git+https://github.com/enigmampc/secret-toolkit)",
- "secret-toolkit-utils 0.1.0 (git+https://github.com/enigmampc/secret-toolkit)",
+ "secret-toolkit-crypto",
+ "secret-toolkit-serialization",
+ "secret-toolkit-snip20",
+ "secret-toolkit-storage",
+ "secret-toolkit-utils",
 ]
 
 [[package]]
@@ -711,18 +681,6 @@ version = "0.1.0"
 source = "git+https://github.com/enigmampc/secret-toolkit?branch=debug-print#e960c64971d5f3cfe33114b3d80b0b0aa46cf963"
 dependencies = [
  "cosmwasm-std 0.10.0 (git+https://github.com/enigmampc/SecretNetwork?rev=004c6bc)",
- "libsecp256k1",
- "rand_chacha 0.2.2",
- "rand_core 0.5.1",
- "sha2 0.9.3",
-]
-
-[[package]]
-name = "secret-toolkit-crypto"
-version = "0.1.0"
-source = "git+https://github.com/enigmampc/secret-toolkit#1faf60a45ece9b4dc7c635786259f731405b4f76"
-dependencies = [
- "cosmwasm-std 0.10.0 (git+https://github.com/enigmampc/SecretNetwork?tag=v1.0.0)",
  "libsecp256k1",
  "rand_chacha 0.2.2",
  "rand_core 0.5.1",
@@ -740,34 +698,13 @@ dependencies = [
 ]
 
 [[package]]
-name = "secret-toolkit-serialization"
-version = "0.1.0"
-source = "git+https://github.com/enigmampc/secret-toolkit#1faf60a45ece9b4dc7c635786259f731405b4f76"
-dependencies = [
- "bincode2",
- "cosmwasm-std 0.10.0 (git+https://github.com/enigmampc/SecretNetwork?tag=v1.0.0)",
- "serde",
-]
-
-[[package]]
 name = "secret-toolkit-snip20"
 version = "0.1.0"
 source = "git+https://github.com/enigmampc/secret-toolkit?branch=debug-print#e960c64971d5f3cfe33114b3d80b0b0aa46cf963"
 dependencies = [
  "cosmwasm-std 0.10.0 (git+https://github.com/enigmampc/SecretNetwork?rev=004c6bc)",
  "schemars",
- "secret-toolkit-utils 0.1.0 (git+https://github.com/enigmampc/secret-toolkit?branch=debug-print)",
- "serde",
-]
-
-[[package]]
-name = "secret-toolkit-snip20"
-version = "0.1.0"
-source = "git+https://github.com/enigmampc/secret-toolkit#1faf60a45ece9b4dc7c635786259f731405b4f76"
-dependencies = [
- "cosmwasm-std 0.10.0 (git+https://github.com/enigmampc/SecretNetwork?tag=v1.0.0)",
- "schemars",
- "secret-toolkit-utils 0.1.0 (git+https://github.com/enigmampc/secret-toolkit)",
+ "secret-toolkit-utils",
  "serde",
 ]
 
@@ -777,19 +714,8 @@ version = "0.1.0"
 source = "git+https://github.com/enigmampc/secret-toolkit?branch=debug-print#e960c64971d5f3cfe33114b3d80b0b0aa46cf963"
 dependencies = [
  "cosmwasm-std 0.10.0 (git+https://github.com/enigmampc/SecretNetwork?rev=004c6bc)",
- "cosmwasm-storage 0.10.0 (git+https://github.com/enigmampc/SecretNetwork?rev=004c6bc)",
- "secret-toolkit-serialization 0.1.0 (git+https://github.com/enigmampc/secret-toolkit?branch=debug-print)",
- "serde",
-]
-
-[[package]]
-name = "secret-toolkit-storage"
-version = "0.1.0"
-source = "git+https://github.com/enigmampc/secret-toolkit#1faf60a45ece9b4dc7c635786259f731405b4f76"
-dependencies = [
- "cosmwasm-std 0.10.0 (git+https://github.com/enigmampc/SecretNetwork?tag=v1.0.0)",
- "cosmwasm-storage 0.10.0 (git+https://github.com/enigmampc/SecretNetwork?tag=v1.0.0)",
- "secret-toolkit-serialization 0.1.0 (git+https://github.com/enigmampc/secret-toolkit)",
+ "cosmwasm-storage",
+ "secret-toolkit-serialization",
  "serde",
 ]
 
@@ -799,16 +725,6 @@ version = "0.1.0"
 source = "git+https://github.com/enigmampc/secret-toolkit?branch=debug-print#e960c64971d5f3cfe33114b3d80b0b0aa46cf963"
 dependencies = [
  "cosmwasm-std 0.10.0 (git+https://github.com/enigmampc/SecretNetwork?rev=004c6bc)",
- "schemars",
- "serde",
-]
-
-[[package]]
-name = "secret-toolkit-utils"
-version = "0.1.0"
-source = "git+https://github.com/enigmampc/secret-toolkit#1faf60a45ece9b4dc7c635786259f731405b4f76"
-dependencies = [
- "cosmwasm-std 0.10.0 (git+https://github.com/enigmampc/SecretNetwork?tag=v1.0.0)",
  "schemars",
  "serde",
 ]
@@ -931,15 +847,15 @@ version = "0.1.0"
 dependencies = [
  "base64 0.12.3",
  "bincode2",
- "cosmwasm-schema 0.9.4",
+ "cosmwasm-schema",
  "cosmwasm-sgx-vm",
  "cosmwasm-std 0.10.0 (git+https://github.com/enigmampc/SecretNetwork?rev=004c6bc)",
- "cosmwasm-storage 0.10.0 (git+https://github.com/enigmampc/SecretNetwork?rev=004c6bc)",
+ "cosmwasm-storage",
  "hex",
  "rand_chacha 0.2.2",
  "rand_core 0.5.1",
  "schemars",
- "secret-toolkit 0.1.0 (git+https://github.com/enigmampc/secret-toolkit?branch=debug-print)",
+ "secret-toolkit",
  "serde",
  "sha2 0.9.3",
  "snafu",
@@ -1074,10 +990,10 @@ name = "weight-master"
 version = "0.1.0"
 dependencies = [
  "cosmwasm-std 0.10.0 (git+https://github.com/enigmampc/SecretNetwork?rev=004c6bc)",
- "cosmwasm-storage 0.10.0 (git+https://github.com/enigmampc/SecretNetwork?rev=004c6bc)",
+ "cosmwasm-storage",
  "schemars",
  "scrt-finance",
- "secret-toolkit 0.1.0 (git+https://github.com/enigmampc/secret-toolkit?branch=debug-print)",
+ "secret-toolkit",
  "serde",
  "snafu",
 ]

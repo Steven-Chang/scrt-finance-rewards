@@ -3,9 +3,11 @@ use cosmwasm_std::{
     StdError, StdResult, Storage, Uint128, WasmMsg,
 };
 
-use crate::msg::{HandleAnswer, HandleMsg, InitMsg, QueryAnswer, QueryMsg, WeightInfo};
-use crate::state::{config, config_read, sort_schedule, Schedule, SpySettings, State};
-use scrt_finance::callbacks::CallbackMsg::NotifyAllocation;
+use crate::msg::{HandleAnswer, InitMsg, QueryAnswer, QueryMsg};
+use crate::state::{config, config_read, State};
+use scrt_finance::master_types::{sort_schedule, Schedule, SpySettings, WeightInfo};
+use scrt_finance::msg::CallbackMsg::NotifyAllocation;
+use scrt_finance::msg::MasterHandleMsg;
 use secret_toolkit::snip20;
 use secret_toolkit::storage::{TypedStore, TypedStoreMut};
 
@@ -34,18 +36,18 @@ pub fn init<S: Storage, A: Api, Q: Querier>(
 pub fn handle<S: Storage, A: Api, Q: Querier>(
     deps: &mut Extern<S, A, Q>,
     env: Env,
-    msg: HandleMsg,
+    msg: MasterHandleMsg,
 ) -> StdResult<HandleResponse> {
     match msg {
-        HandleMsg::UpdateAllocation {
+        MasterHandleMsg::UpdateAllocation {
             spy_addr,
             spy_hash,
             hook,
         } => update_allocation(deps, env, spy_addr, spy_hash, hook),
-        HandleMsg::SetWeights { weights } => set_weights(deps, env, weights),
-        HandleMsg::SetSchedule { schedule } => set_schedule(deps, env, schedule),
-        HandleMsg::SetGovToken { addr, hash } => set_gov_token(deps, env, addr, hash),
-        HandleMsg::ChangeAdmin { addr } => change_admin(deps, env, addr),
+        MasterHandleMsg::SetWeights { weights } => set_weights(deps, env, weights),
+        MasterHandleMsg::SetSchedule { schedule } => set_schedule(deps, env, schedule),
+        MasterHandleMsg::SetGovToken { addr, hash } => set_gov_token(deps, env, addr, hash),
+        MasterHandleMsg::ChangeAdmin { addr } => change_admin(deps, env, addr),
     }
 }
 
@@ -93,7 +95,7 @@ fn set_weights<S: Storage, A: Api, Q: Querier>(
             rs.load(to_update.address.clone().0.as_bytes())
                 .unwrap_or(SpySettings {
                     weight: 0,
-                    last_update_block: env.block.height.clone(),
+                    last_update_block: env.block.height,
                 });
 
         // There is no need to update a SPY twice in a block, and there is no need to update a SPY
@@ -165,12 +167,10 @@ fn update_allocation<S: Storage, A: Api, Q: Querier>(
     let state = config_read(&deps.storage).load()?;
 
     let mut rs = TypedStoreMut::attach(&mut deps.storage);
-    let mut spy_settings = rs
-        .load(spy_address.clone().0.as_bytes())
-        .unwrap_or(SpySettings {
-            weight: 0,
-            last_update_block: env.block.height.clone(),
-        });
+    let mut spy_settings = rs.load(spy_address.0.as_bytes()).unwrap_or(SpySettings {
+        weight: 0,
+        last_update_block: env.block.height,
+    });
 
     let mut rewards = 0;
     let mut messages = vec![];
@@ -188,7 +188,7 @@ fn update_allocation<S: Storage, A: Api, Q: Querier>(
             None,
             1,
             state.gov_token_hash.clone(),
-            state.gov_token_addr.clone(),
+            state.gov_token_addr,
         )?);
 
         spy_settings.last_update_block = env.block.height;
@@ -247,7 +247,7 @@ fn change_admin<S: Storage, A: Api, Q: Querier>(
 
     enforce_admin(state.clone(), env)?;
 
-    state.admin = admin_addr.clone();
+    state.admin = admin_addr;
 
     config(&mut deps.storage).save(&state)?;
 
@@ -323,7 +323,7 @@ fn get_spy_rewards(
 
     let mut multiplier = 0;
     // Going serially assuming that schedule is not a big vector
-    for u in schedule.clone() {
+    for u in schedule.to_owned() {
         if last_update_block < u.end_block {
             if current_block > u.end_block {
                 multiplier += (u.end_block - last_update_block) as u128 * u.mint_per_block;

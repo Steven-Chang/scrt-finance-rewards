@@ -1,4 +1,5 @@
-pub mod callbacks;
+pub mod master_types;
+pub mod msg;
 
 #[cfg(test)]
 mod tests {

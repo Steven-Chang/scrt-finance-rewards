@@ -10,11 +10,10 @@ use secret_toolkit::utils::{pad_handle_result, pad_query_result};
 
 use crate::constants::*;
 use crate::msg::ResponseStatus::Success;
-use crate::msg::{
-    HandleAnswer, HandleMsg, InitMsg, QueryAnswer, QueryMsg, ReceiveAnswer, ReceiveMsg,
-};
+use crate::msg::{HandleAnswer, InitMsg, QueryAnswer, QueryMsg, ReceiveAnswer, ReceiveMsg};
 use crate::state::{Config, RewardPool, UserInfo};
 use crate::viewing_key::{ViewingKey, VIEWING_KEY_SIZE};
+use scrt_finance::msg::LPStakingHandleMsg;
 
 pub fn init<S: Storage, A: Api, Q: Querier>(
     deps: &mut Extern<S, A, Q>,
@@ -89,13 +88,13 @@ pub fn init<S: Storage, A: Api, Q: Querier>(
 pub fn handle<S: Storage, A: Api, Q: Querier>(
     deps: &mut Extern<S, A, Q>,
     env: Env,
-    msg: HandleMsg,
+    msg: LPStakingHandleMsg,
 ) -> StdResult<HandleResponse> {
     let config: Config = TypedStoreMut::attach(&mut deps.storage).load(CONFIG_KEY)?;
     if config.is_stopped {
         return match msg {
-            HandleMsg::EmergencyRedeem {} => emergency_redeem(deps, env),
-            HandleMsg::ResumeContract {} => resume_contract(deps, env),
+            LPStakingHandleMsg::EmergencyRedeem {} => emergency_redeem(deps, env),
+            LPStakingHandleMsg::ResumeContract {} => resume_contract(deps, env),
             _ => Err(StdError::generic_err(
                 "this contract is stopped and this action is not allowed",
             )),
@@ -103,16 +102,20 @@ pub fn handle<S: Storage, A: Api, Q: Querier>(
     }
 
     let response = match msg {
-        HandleMsg::Redeem { amount } => redeem(deps, env, amount),
-        HandleMsg::Receive {
+        LPStakingHandleMsg::Redeem { amount } => redeem(deps, env, amount),
+        LPStakingHandleMsg::Receive {
             from, amount, msg, ..
         } => receive(deps, env, from, amount.u128(), msg),
-        HandleMsg::CreateViewingKey { entropy, .. } => create_viewing_key(deps, env, entropy),
-        HandleMsg::SetViewingKey { key, .. } => set_viewing_key(deps, env, key),
-        HandleMsg::ClaimRewardPool { to: recipient } => claim_reward_pool(deps, env, recipient),
-        HandleMsg::StopContract {} => stop_contract(deps, env),
-        HandleMsg::ChangeAdmin { address } => change_admin(deps, env, address),
-        HandleMsg::SetDeadline { block: height } => set_deadline(deps, env, height),
+        LPStakingHandleMsg::CreateViewingKey { entropy, .. } => {
+            create_viewing_key(deps, env, entropy)
+        }
+        LPStakingHandleMsg::SetViewingKey { key, .. } => set_viewing_key(deps, env, key),
+        LPStakingHandleMsg::ClaimRewardPool { to: recipient } => {
+            claim_reward_pool(deps, env, recipient)
+        }
+        LPStakingHandleMsg::StopContract {} => stop_contract(deps, env),
+        LPStakingHandleMsg::ChangeAdmin { address } => change_admin(deps, env, address),
+        LPStakingHandleMsg::SetDeadline { block: height } => set_deadline(deps, env, height),
         _ => Err(StdError::generic_err("Unavailable or unknown action")),
     };
 
@@ -198,7 +201,7 @@ fn deposit<S: Storage, A: Api, Q: Querier>(
     }
 
     // Adjust scale to allow easy division and prevent overflows
-    let amount = amount / INC_TOKEN_SCALE;
+    // let amount = amount / INC_TOKEN_SCALE;
 
     let mut reward_pool = update_rewards(deps, &env, &config)?;
 
@@ -689,7 +692,7 @@ fn update_rewards<S: Storage, A: Api, Q: Querier>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::msg::HandleMsg::{Receive, Redeem, SetViewingKey};
+    use crate::msg::LPStakingHandleMsg::{Receive, Redeem, SetViewingKey};
     use crate::msg::QueryMsg::{Deposit, Rewards};
     use crate::msg::ReceiveMsg;
     use crate::state::Snip20;
@@ -757,7 +760,7 @@ mod tests {
         deps: &Extern<S, A, Q>,
         action: &str,
         user: HumanAddr,
-    ) -> (HandleMsg, String) {
+    ) -> (LPStakingHandleMsg, String) {
         let mut rng = rand::thread_rng();
         let chance = rng.gen_range(0, 100000);
 
@@ -765,7 +768,7 @@ mod tests {
             "deposit" => {
                 let amount: u128 = rng.gen_range(10e12 as u128, 1000e18 as u128);
 
-                let msg = HandleMsg::Receive {
+                let msg = LPStakingHandleMsg::Receive {
                     sender: user.clone(),
                     from: user,
                     amount: Uint128(amount),
@@ -777,7 +780,7 @@ mod tests {
             "redeem" => {
                 let amount: u128 = rng.gen_range(1e12 as u128, 1000e18 as u128);
 
-                let msg = HandleMsg::Redeem {
+                let msg = LPStakingHandleMsg::Redeem {
                     amount: Some(Uint128(amount)),
                 };
 
@@ -789,14 +792,14 @@ mod tests {
 
                 let new = rng.gen_range(current + 1.0, current * 1.001);
 
-                let msg = HandleMsg::SetDeadline { block: new as u64 };
+                let msg = LPStakingHandleMsg::SetDeadline { block: new as u64 };
 
                 (msg, "admin".to_string())
             }
             "rewards" if chance == 7 => {
                 let amount: u128 = rng.gen_range(10000e6 as u128, 100000e6 as u128);
 
-                let msg = HandleMsg::Receive {
+                let msg = LPStakingHandleMsg::Receive {
                     sender: user.clone(),
                     from: user,
                     amount: Uint128(amount),
@@ -806,7 +809,7 @@ mod tests {
                 (msg, "scrt".to_string())
             }
             _ => (
-                HandleMsg::Redeem {
+                LPStakingHandleMsg::Redeem {
                     amount: Some(Uint128(u128::MAX)), // This will never work but will keep the tests going
                 },
                 "".to_string(),
@@ -917,9 +920,9 @@ mod tests {
         0
     }
 
-    fn extract_reward_deposit(msg: HandleMsg) -> u128 {
+    fn extract_reward_deposit(msg: LPStakingHandleMsg) -> u128 {
         match msg {
-            HandleMsg::Receive { amount, msg, .. } => {
+            LPStakingHandleMsg::Receive { amount, msg, .. } => {
                 let transfer_msg: ReceiveMsg = from_binary(&msg).unwrap();
 
                 match transfer_msg {
@@ -979,7 +982,7 @@ mod tests {
 
         // Make sure all users are fully redeemed
         for user in users.clone() {
-            let redeem_msg = HandleMsg::Redeem { amount: None };
+            let redeem_msg = LPStakingHandleMsg::Redeem { amount: None };
             let result = handle(&mut deps, mock_env(user.0, &[], 1_700_000), redeem_msg);
             total_rewards_output += extract_rewards(result);
         }
@@ -1005,11 +1008,11 @@ mod tests {
         let mut rewards = 500_000_000000;
         let mut total_rewards_output = 0;
 
-        let msg = HandleMsg::SetDeadline {
+        let msg = LPStakingHandleMsg::SetDeadline {
             block: new_deadline,
         };
         let result = handle(deps, mock_env("admin".to_string(), &[], start_block), msg);
-        let msg = HandleMsg::Receive {
+        let msg = LPStakingHandleMsg::Receive {
             sender: HumanAddr("admin".to_string()),
             from: HumanAddr("admin".to_string()),
             amount: Uint128(rewards),
@@ -1050,7 +1053,7 @@ mod tests {
 
         // Make sure all users are fully redeemed
         for user in users {
-            let redeem_msg = HandleMsg::Redeem { amount: None };
+            let redeem_msg = LPStakingHandleMsg::Redeem { amount: None };
             let result = handle(deps, mock_env(user.0, &[], 1_700_000), redeem_msg);
             total_rewards_output += extract_rewards(result);
         }
@@ -1066,7 +1069,7 @@ mod tests {
     fn test_claim_pool() {
         let (init_result, mut deps) = init_helper(10000000); // Claim height is deadline + 1
 
-        let claim_msg = HandleMsg::ClaimRewardPool { to: None };
+        let claim_msg = LPStakingHandleMsg::ClaimRewardPool { to: None };
         let handle_response = handle(&mut deps, mock_env("not_admin", &[], 10), claim_msg.clone());
         assert_eq!(
             handle_response.unwrap_err(),
@@ -1103,7 +1106,7 @@ mod tests {
     fn test_stop_contract() {
         let (init_result, mut deps) = init_helper(10000000);
 
-        let stop_msg = HandleMsg::StopContract {};
+        let stop_msg = LPStakingHandleMsg::StopContract {};
         let handle_response = handle(&mut deps, mock_env("not_admin", &[], 10), stop_msg.clone());
         assert_eq!(
             handle_response.unwrap_err(),
@@ -1121,7 +1124,7 @@ mod tests {
             to_binary(&HandleAnswer::StopContract { status: Success }).unwrap()
         );
 
-        let redeem_msg = HandleMsg::Redeem { amount: None };
+        let redeem_msg = LPStakingHandleMsg::Redeem { amount: None };
         let handle_response = handle(&mut deps, mock_env("user", &[], 20), redeem_msg);
         assert_eq!(
             handle_response.unwrap_err(),
@@ -1131,7 +1134,7 @@ mod tests {
             }
         );
 
-        let resume_msg = HandleMsg::ResumeContract {};
+        let resume_msg = LPStakingHandleMsg::ResumeContract {};
         let handle_response = handle(&mut deps, mock_env("admin", &[], 21), resume_msg);
         let unwrapped_result: HandleAnswer =
             from_binary(&handle_response.unwrap().data.unwrap()).unwrap();
@@ -1140,7 +1143,7 @@ mod tests {
             to_binary(&HandleAnswer::ResumeContract { status: Success }).unwrap()
         );
 
-        let redeem_msg = HandleMsg::Redeem { amount: None };
+        let redeem_msg = LPStakingHandleMsg::Redeem { amount: None };
         let handle_response = handle(&mut deps, mock_env("user", &[], 20), redeem_msg);
         let unwrapped_result: HandleAnswer =
             from_binary(&handle_response.unwrap().data.unwrap()).unwrap();
@@ -1154,7 +1157,7 @@ mod tests {
     fn test_admin() {
         let (init_result, mut deps) = init_helper(10000000);
 
-        let admin_action_msg = HandleMsg::ChangeAdmin {
+        let admin_action_msg = LPStakingHandleMsg::ChangeAdmin {
             address: HumanAddr("not_admin".to_string()),
         };
         let handle_response = handle(&mut deps, mock_env("not_admin", &[], 1), admin_action_msg);
@@ -1166,7 +1169,7 @@ mod tests {
             }
         );
 
-        let admin_action_msg = HandleMsg::ChangeAdmin {
+        let admin_action_msg = LPStakingHandleMsg::ChangeAdmin {
             address: HumanAddr("new_admin".to_string()),
         };
         let handle_response = handle(&mut deps, mock_env("admin", &[], 1), admin_action_msg);
@@ -1177,7 +1180,7 @@ mod tests {
             to_binary(&HandleAnswer::ChangeAdmin { status: Success }).unwrap()
         );
 
-        let admin_action_msg = HandleMsg::ChangeAdmin {
+        let admin_action_msg = LPStakingHandleMsg::ChangeAdmin {
             address: HumanAddr("not_admin".to_string()),
         };
         let handle_response = handle(&mut deps, mock_env("admin", &[], 1), admin_action_msg);
@@ -1189,7 +1192,7 @@ mod tests {
             }
         );
 
-        let admin_action_msg = HandleMsg::ChangeAdmin {
+        let admin_action_msg = LPStakingHandleMsg::ChangeAdmin {
             address: HumanAddr("not_admin".to_string()),
         };
         let handle_response = handle(&mut deps, mock_env("new_admin", &[], 1), admin_action_msg);
