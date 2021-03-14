@@ -1,6 +1,6 @@
 use cosmwasm_std::{
     log, to_binary, Api, Binary, Env, Extern, HandleResponse, HumanAddr, InitResponse, Querier,
-    StdResult, Storage, Uint128, WasmMsg,
+    StdError, StdResult, Storage, Uint128, WasmMsg,
 };
 
 use crate::msg::CallbackMsg::NotifyAllocation;
@@ -58,7 +58,7 @@ fn set_schedule<S: Storage, A: Api, Q: Querier>(
     let mut st = config(&mut deps.storage);
     let mut state = st.load()?;
 
-    // TODO: Check admin
+    enforce_admin(state.clone(), env)?;
 
     let mut s = schedule;
     sort_schedule(&mut s);
@@ -80,7 +80,7 @@ fn set_weights<S: Storage, A: Api, Q: Querier>(
 ) -> StdResult<HandleResponse> {
     let mut state = config_read(&deps.storage).load()?;
 
-    // TODO: Check admin
+    enforce_admin(state.clone(), env.clone())?;
 
     let mut messages = vec![];
     let mut logs = vec![];
@@ -223,7 +223,7 @@ fn set_gov_token<S: Storage, A: Api, Q: Querier>(
 ) -> StdResult<HandleResponse> {
     let mut state = config_read(&deps.storage).load()?;
 
-    // TODO: Check admin
+    enforce_admin(state.clone(), env)?;
 
     state.gov_token_addr = gov_addr.clone();
     state.gov_token_hash = gov_hash;
@@ -244,7 +244,7 @@ fn change_admin<S: Storage, A: Api, Q: Querier>(
 ) -> StdResult<HandleResponse> {
     let mut state = config_read(&deps.storage).load()?;
 
-    // TODO: Check admin
+    enforce_admin(state.clone(), env)?;
 
     state.admin = admin_addr.clone();
 
@@ -290,6 +290,17 @@ fn get_spy_rewards(
     }
 
     (multiplier * spy_settings.weight as u128) / total_weight as u128
+}
+
+fn enforce_admin(config: State, env: Env) -> StdResult<()> {
+    if config.admin != env.message.sender {
+        return Err(StdError::generic_err(format!(
+            "not an admin: {}",
+            env.message.sender
+        )));
+    }
+
+    Ok(())
 }
 
 #[cfg(test)]
