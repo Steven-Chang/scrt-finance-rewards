@@ -20,25 +20,21 @@ pub struct Config {
     pub reward_token: SecretContract,
     pub inc_token: SecretContract,
     pub master: SecretContract,
-    pub pool_claim_block: u64,
-    pub deadline: u64,
     pub viewing_key: String,
     pub prng_seed: Vec<u8>,
     pub is_stopped: bool,
 }
 
-/// RewardPool is a struct that keeps track of rewards and lockups
-///
-/// `pending_rewards` - Rewards left to distribute.
-/// `inc_token_supply` - Total supply of the incentivized token that is locked in the contract.
-///  This number is scaled down by `constants::INC_TOKEN_SCALE`. Keeping track of it so external query will not
-///  be necessary every time a user locks/redeems tokens.
-/// `last_reward_block` - Last block in which rewards got updated.
-/// `acc_reward_per_share` - Accumulated rewards per share. This number is scaled up by `constants::REWARD_SCALE`
-///  and shares scaled the same way as `inc_token_supply`.
+// RewardPool is a struct that keeps track of rewards and lockups
 #[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Clone)]
 pub struct RewardPool {
     pub residue: u128,
     pub inc_token_supply: u128,
     pub acc_reward_per_share: u128,
+}
+
+#[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Clone, JsonSchema)]
+pub struct TokenInfo {
+    pub name: String,
+    pub symbol: String,
 }

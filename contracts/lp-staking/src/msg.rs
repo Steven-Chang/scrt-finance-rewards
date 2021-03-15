@@ -1,4 +1,4 @@
-use crate::state::SecretContract;
+use crate::state::{SecretContract, TokenInfo};
 use crate::viewing_key::ViewingKey;
 use cosmwasm_std::{Binary, HumanAddr, Uint128};
 use schemars::JsonSchema;
@@ -9,9 +9,8 @@ pub struct InitMsg {
     pub reward_token: SecretContract,
     pub inc_token: SecretContract,
     pub master: SecretContract,
-    pub deadline: u64,
-    pub pool_claim_block: u64,
     pub viewing_key: String,
+    pub token_info: TokenInfo,
     pub prng_seed: Binary,
 }
 
@@ -59,12 +58,9 @@ pub enum ReceiveAnswer {
 #[serde(rename_all = "snake_case")]
 pub enum QueryMsg {
     TokenInfo {},
-    ClaimBlock {},
     ContractStatus {},
     RewardToken {},
     IncentivizedToken {},
-    EndHeight {},
-    RewardPoolBalance {},
 
     // Authenticated
     Rewards {
@@ -103,9 +99,6 @@ pub enum QueryAnswer {
     Deposit {
         deposit: Uint128,
     },
-    ClaimBlock {
-        height: u64,
-    },
     ContractStatus {
         is_stopped: bool,
     },
@@ -114,12 +107,6 @@ pub enum QueryAnswer {
     },
     IncentivizedToken {
         token: SecretContract,
-    },
-    EndHeight {
-        height: u64,
-    },
-    RewardPoolBalance {
-        balance: Uint128,
     },
 
     QueryError {

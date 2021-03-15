@@ -13,7 +13,7 @@ use crate::msg::ResponseStatus::Success;
 use crate::msg::{
     HandleAnswer, HookMsg, InitMsg, QueryAnswer, QueryMsg, ReceiveAnswer, ReceiveMsg,
 };
-use crate::state::{Config, RewardPool, UserInfo};
+use crate::state::{Config, RewardPool, TokenInfo, UserInfo};
 use crate::viewing_key::{ViewingKey, VIEWING_KEY_SIZE};
 use scrt_finance::msg::{CallbackMsg, LPStakingHandleMsg, MasterHandleMsg};
 
@@ -32,8 +32,6 @@ pub fn init<S: Storage, A: Api, Q: Querier>(
             reward_token: msg.reward_token.clone(),
             inc_token: msg.inc_token.clone(),
             master: msg.master,
-            pool_claim_block: msg.pool_claim_block,
-            deadline: msg.deadline,
             viewing_key: msg.viewing_key.clone(),
             prng_seed: prng_seed_hashed.to_vec(),
             is_stopped: false,
@@ -48,6 +46,8 @@ pub fn init<S: Storage, A: Api, Q: Querier>(
             acc_reward_per_share: 0,
         },
     )?;
+
+    TypedStoreMut::<TokenInfo, S>::attach(&mut deps.storage).store(TOKEN_INFO_KEY, &msg.token_info);
 
     // Register sSCRT and incentivized token, set vks
     let messages = vec![
@@ -131,13 +131,10 @@ pub fn query<S: Storage, A: Api, Q: Querier>(
     msg: QueryMsg,
 ) -> StdResult<Binary> {
     let response = match msg {
-        QueryMsg::ClaimBlock {} => query_claim_block(deps),
         QueryMsg::ContractStatus {} => query_contract_status(deps),
         QueryMsg::RewardToken {} => query_reward_token(deps),
         QueryMsg::IncentivizedToken {} => query_incentivized_token(deps),
-        QueryMsg::EndHeight {} => query_end_height(deps),
-        QueryMsg::RewardPoolBalance {} => query_reward_pool_balance(deps),
-        QueryMsg::TokenInfo {} => query_token_info(),
+        QueryMsg::TokenInfo {} => query_token_info(deps),
         _ => authenticated_queries(deps, msg),
     };
 
@@ -546,14 +543,6 @@ fn query_deposit<S: Storage, A: Api, Q: Querier>(
     })
 }
 
-fn query_claim_block<S: Storage, A: Api, Q: Querier>(deps: &Extern<S, A, Q>) -> StdResult<Binary> {
-    let config: Config = TypedStore::attach(&deps.storage).load(CONFIG_KEY)?;
-
-    to_binary(&QueryAnswer::ClaimBlock {
-        height: config.pool_claim_block,
-    })
-}
-
 fn query_contract_status<S: Storage, A: Api, Q: Querier>(
     deps: &Extern<S, A, Q>,
 ) -> StdResult<Binary> {
@@ -582,31 +571,13 @@ fn query_incentivized_token<S: Storage, A: Api, Q: Querier>(
     })
 }
 
-fn query_end_height<S: Storage, A: Api, Q: Querier>(deps: &Extern<S, A, Q>) -> StdResult<Binary> {
-    let config: Config = TypedStore::attach(&deps.storage).load(CONFIG_KEY)?;
-
-    to_binary(&QueryAnswer::EndHeight {
-        height: config.deadline,
-    })
-}
-
-fn query_reward_pool_balance<S: Storage, A: Api, Q: Querier>(
-    deps: &Extern<S, A, Q>,
-) -> StdResult<Binary> {
-    let reward_pool: RewardPool = TypedStore::attach(&deps.storage).load(REWARD_POOL_KEY)?;
-
-    // TODO: fix
-    // to_binary(&QueryAnswer::RewardPoolBalance {
-    //     balance: Uint128(reward_pool.pending_rewards as u128),
-    // })
-    unimplemented!()
-}
-
 // This is only for Keplr support (Viewing Keys)
-fn query_token_info() -> StdResult<Binary> {
+fn query_token_info<S: Storage, A: Api, Q: Querier>(deps: &Extern<S, A, Q>) -> StdResult<Binary> {
+    let token_info: TokenInfo = TypedStore::attach(&deps.storage).load(TOKEN_INFO_KEY)?;
+
     to_binary(&QueryAnswer::TokenInfo {
-        name: "ETH Bridge Rewards".to_string(),
-        symbol: "ETH-RWRDS".to_string(),
+        name: token_info.name,
+        symbol: token_info.symbol,
         decimals: 1,
         total_supply: None,
     })
