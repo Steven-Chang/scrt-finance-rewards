@@ -1,4 +1,4 @@
-use crate::state::Snip20;
+use crate::state::SecretContract;
 use crate::viewing_key::ViewingKey;
 use cosmwasm_std::{Binary, HumanAddr, Uint128};
 use schemars::JsonSchema;
@@ -6,8 +6,9 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct InitMsg {
-    pub reward_token: Snip20,
-    pub inc_token: Snip20,
+    pub reward_token: SecretContract,
+    pub inc_token: SecretContract,
+    pub master: SecretContract,
     pub deadline: u64,
     pub pool_claim_block: u64,
     pub viewing_key: String,
@@ -32,7 +33,19 @@ pub enum HandleAnswer {
 #[serde(rename_all = "snake_case")]
 pub enum ReceiveMsg {
     Deposit {},
-    DepositRewards {},
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum HookMsg {
+    Deposit {
+        from: HumanAddr,
+        amount: Uint128,
+    },
+    Redeem {
+        to: HumanAddr,
+        amount: Option<Uint128>,
+    },
 }
 
 #[derive(Serialize, Deserialize, JsonSchema, Debug)]
@@ -97,10 +110,10 @@ pub enum QueryAnswer {
         is_stopped: bool,
     },
     RewardToken {
-        token: Snip20,
+        token: SecretContract,
     },
     IncentivizedToken {
-        token: Snip20,
+        token: SecretContract,
     },
     EndHeight {
         height: u64,

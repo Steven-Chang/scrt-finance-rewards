@@ -9,7 +9,7 @@ pub struct UserInfo {
 }
 
 #[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Clone, JsonSchema)]
-pub struct Snip20 {
+pub struct SecretContract {
     pub address: HumanAddr,
     pub contract_hash: String,
 }
@@ -17,8 +17,9 @@ pub struct Snip20 {
 #[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Clone)]
 pub struct Config {
     pub admin: HumanAddr,
-    pub reward_token: Snip20,
-    pub inc_token: Snip20,
+    pub reward_token: SecretContract,
+    pub inc_token: SecretContract,
+    pub master: SecretContract,
     pub pool_claim_block: u64,
     pub deadline: u64,
     pub viewing_key: String,
@@ -37,8 +38,7 @@ pub struct Config {
 ///  and shares scaled the same way as `inc_token_supply`.
 #[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Clone)]
 pub struct RewardPool {
-    pub pending_rewards: u128,
+    pub residue: u128,
     pub inc_token_supply: u128,
-    pub last_reward_block: u64,
     pub acc_reward_per_share: u128,
 }

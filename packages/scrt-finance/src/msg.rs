@@ -53,21 +53,22 @@ pub enum LPStakingHandleMsg {
     },
 
     // Admin commands
-    SetDeadline {
-        block: u64,
-    },
-    ClaimRewardPool {
-        to: Option<HumanAddr>,
-    },
     StopContract {},
     ResumeContract {},
     ChangeAdmin {
         address: HumanAddr,
     },
+
+    // Master callbacks
+    NotifyAllocation {
+        amount: Uint128,
+        hook: Option<Binary>,
+    },
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
+// Duplicating because need a generic one in the master contract, but it has to be in each SPY's HandleMsg
 pub enum CallbackMsg {
     NotifyAllocation {
         amount: Uint128,
