@@ -65,7 +65,7 @@ pub enum QueryMsg {
     // Authenticated
     Rewards {
         address: HumanAddr,
-        height: u64,
+        new_rewards: Uint128,
         key: String,
     },
     Deposit {

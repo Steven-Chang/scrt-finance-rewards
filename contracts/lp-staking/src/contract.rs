@@ -15,7 +15,7 @@ use crate::msg::{
 };
 use crate::state::{Config, RewardPool, TokenInfo, UserInfo};
 use crate::viewing_key::{ViewingKey, VIEWING_KEY_SIZE};
-use scrt_finance::msg::{CallbackMsg, LPStakingHandleMsg, MasterHandleMsg};
+use scrt_finance::msg::{LPStakingHandleMsg, MasterHandleMsg};
 
 pub fn init<S: Storage, A: Api, Q: Querier>(
     deps: &mut Extern<S, A, Q>,
@@ -47,7 +47,8 @@ pub fn init<S: Storage, A: Api, Q: Querier>(
         },
     )?;
 
-    TypedStoreMut::<TokenInfo, S>::attach(&mut deps.storage).store(TOKEN_INFO_KEY, &msg.token_info);
+    TypedStoreMut::<TokenInfo, S>::attach(&mut deps.storage)
+        .store(TOKEN_INFO_KEY, &msg.token_info)?;
 
     // Register sSCRT and incentivized token, set vks
     let messages = vec![
@@ -157,8 +158,10 @@ pub fn authenticated_queries<S: Storage, A: Api, Q: Querier>(
     } else if key.check_viewing_key(expected_key.unwrap().as_slice()) {
         return match msg {
             QueryMsg::Rewards {
-                address, height, ..
-            } => query_pending_rewards(deps, &address, height),
+                address,
+                new_rewards,
+                ..
+            } => query_pending_rewards(deps, &address, new_rewards.u128()),
             QueryMsg::Deposit { address, .. } => query_deposit(deps, &address),
             _ => panic!("This should never happen"),
         };
@@ -238,7 +241,7 @@ fn deposit<S: Storage, A: Api, Q: Querier>(
 
 fn deposit_hook<S: Storage, A: Api, Q: Querier>(
     deps: &mut Extern<S, A, Q>,
-    env: Env,
+    _env: Env,
     mut reward_pool: RewardPool,
     from: HumanAddr,
     amount: u128,
@@ -495,39 +498,24 @@ fn emergency_redeem<S: Storage, A: Api, Q: Querier>(
 fn query_pending_rewards<S: Storage, A: Api, Q: Querier>(
     deps: &Extern<S, A, Q>,
     address: &HumanAddr,
-    height: u64,
+    new_rewards: u128,
 ) -> StdResult<Binary> {
     let reward_pool = TypedStore::<RewardPool, S>::attach(&deps.storage).load(REWARD_POOL_KEY)?;
     let user = TypedStore::<UserInfo, S>::attach(&deps.storage)
         .load(address.0.as_bytes())
         .unwrap_or(UserInfo { locked: 0, debt: 0 });
-    let config = TypedStore::<Config, S>::attach(&deps.storage).load(CONFIG_KEY)?;
     let mut acc_reward_per_share = reward_pool.acc_reward_per_share;
 
-    // TODO: fix
-    // if height > reward_pool.last_reward_block
-    //     && reward_pool.last_reward_block < config.deadline
-    //     && reward_pool.inc_token_supply != 0
-    // {
-    //     let mut height = height;
-    //     if height > config.deadline {
-    //         height = config.deadline;
-    //     }
-    //
-    //     let blocks_to_go = config.deadline - reward_pool.last_reward_block;
-    //     let blocks_to_vest = height - reward_pool.last_reward_block;
-    //     let rewards =
-    //         (blocks_to_vest as u128) * reward_pool.pending_rewards / (blocks_to_go as u128);
-    //
-    //     acc_reward_per_share += rewards * REWARD_SCALE / reward_pool.inc_token_supply;
-    // }
-    //
-    // to_binary(&QueryAnswer::Rewards {
-    //     // This is not necessarily accurate, since we don't validate the block height. It is up to
-    //     // the UI to display accurate numbers
-    //     rewards: Uint128(user.locked * acc_reward_per_share / REWARD_SCALE - user.debt),
-    // })
-    unimplemented!()
+    if reward_pool.inc_token_supply != 0 {
+        acc_reward_per_share +=
+            (new_rewards + reward_pool.residue) * REWARD_SCALE / reward_pool.inc_token_supply;
+    }
+
+    to_binary(&QueryAnswer::Rewards {
+        // This is not necessarily accurate, since we don't validate new_rewards. It is up to
+        // the UI to display accurate numbers
+        rewards: Uint128(user.locked * acc_reward_per_share / REWARD_SCALE - user.debt),
+    })
 }
 
 fn query_deposit<S: Storage, A: Api, Q: Querier>(
