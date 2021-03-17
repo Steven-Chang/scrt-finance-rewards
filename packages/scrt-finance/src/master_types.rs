@@ -1,4 +1,4 @@
-use cosmwasm_std::HumanAddr;
+use cosmwasm_std::{HumanAddr, Uint128};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -18,7 +18,7 @@ pub struct SpySettings {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema, Copy)]
 pub struct ScheduleUnit {
     pub end_block: u64,
-    pub mint_per_block: u128,
+    pub mint_per_block: Uint128,
 }
 
 pub type Schedule = Vec<ScheduleUnit>;

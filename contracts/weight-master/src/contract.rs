@@ -326,10 +326,10 @@ fn get_spy_rewards(
     for u in schedule.to_owned() {
         if last_update_block < u.end_block {
             if current_block > u.end_block {
-                multiplier += (u.end_block - last_update_block) as u128 * u.mint_per_block;
+                multiplier += (u.end_block - last_update_block) as u128 * u.mint_per_block.u128();
                 last_update_block = u.end_block;
             } else {
-                multiplier += (current_block - last_update_block) as u128 * u.mint_per_block;
+                multiplier += (current_block - last_update_block) as u128 * u.mint_per_block.u128();
                 // last_update_block = current_block;
                 break; // No need to go further up the schedule
             }
