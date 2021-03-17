@@ -1,6 +1,7 @@
 use cosmwasm_std::{
-    from_binary, to_binary, Api, Binary, CosmosMsg, Env, Extern, HandleResponse, HumanAddr,
-    InitResponse, Querier, ReadonlyStorage, StdError, StdResult, Storage, Uint128, WasmMsg,
+    debug_print, from_binary, to_binary, Api, Binary, CosmosMsg, Env, Extern, HandleResponse,
+    HumanAddr, InitResponse, Querier, ReadonlyStorage, StdError, StdResult, Storage, Uint128,
+    WasmMsg,
 };
 use cosmwasm_storage::{PrefixedStorage, ReadonlyPrefixedStorage};
 use secret_toolkit::crypto::sha_256;
@@ -320,10 +321,21 @@ fn redeem_hook<S: Storage, A: Api, Q: Querier>(
 
     let mut messages: Vec<CosmosMsg> = vec![];
     let pending = user.locked * reward_pool.acc_reward_per_share / REWARD_SCALE - user.debt;
+    debug_print(format!("DEBUG DEBUG DEBUG"));
+    debug_print(format!(
+        "reward pool: | residue: {} | total supply: {} | acc: {} |",
+        reward_pool.residue, reward_pool.inc_token_supply, reward_pool.acc_reward_per_share
+    ));
+    debug_print(format!(
+        "user: | locked: {} | debt: {} |",
+        user.locked, user.debt
+    ));
+    debug_print(format!("pending: {}", pending));
+    debug_print(format!("DEBUG DEBUG DEBUG"));
     if pending > 0 {
         // Transfer rewards
         messages.push(secret_toolkit::snip20::transfer_msg(
-            env.message.sender.clone(),
+            to.clone(),
             Uint128(pending),
             None,
             RESPONSE_BLOCK_SIZE,
@@ -335,14 +347,13 @@ fn redeem_hook<S: Storage, A: Api, Q: Querier>(
     // Transfer redeemed tokens
     user.locked -= amount;
     user.debt = user.locked * reward_pool.acc_reward_per_share / REWARD_SCALE;
-    TypedStoreMut::<UserInfo, S>::attach(&mut deps.storage)
-        .store(env.message.sender.0.as_bytes(), &user)?;
+    TypedStoreMut::<UserInfo, S>::attach(&mut deps.storage).store(to.0.as_bytes(), &user)?;
 
     reward_pool.inc_token_supply -= amount;
     TypedStoreMut::attach(&mut deps.storage).store(REWARD_POOL_KEY, &reward_pool)?;
 
     messages.push(secret_toolkit::snip20::transfer_msg(
-        env.message.sender,
+        to,
         Uint128(amount),
         None,
         RESPONSE_BLOCK_SIZE,
@@ -643,6 +654,7 @@ mod tests {
         coins, from_binary, BlockInfo, Coin, ContractInfo, Empty, MessageInfo, StdError, WasmMsg,
     };
     use rand::Rng;
+    use scrt_finance::msg::LPStakingHandleMsg::SetViewingKey;
     use serde::{Deserialize, Serialize};
 
     // Helper functions
@@ -665,10 +677,16 @@ mod tests {
                 address: HumanAddr("eth".to_string()),
                 contract_hash: "2".to_string(),
             },
-            deadline,
-            pool_claim_block: deadline + 1,
             prng_seed: Binary::from("lolz fun yay".as_bytes()),
             viewing_key: "123".to_string(),
+            master: SecretContract {
+                address: Default::default(),
+                contract_hash: "".to_string(),
+            },
+            token_info: TokenInfo {
+                name: "".to_string(),
+                symbol: "".to_string(),
+            },
         };
 
         (init(&mut deps, env, init_msg), deps)
@@ -760,7 +778,7 @@ mod tests {
     fn print_status(
         deps: &Extern<MockStorage, MockApi, MockQuerier>,
         users: Vec<HumanAddr>,
-        block: u64,
+        new_mint: u128,
     ) {
         let reward_pool = TypedStore::<RewardPool, MockStorage>::attach(&deps.storage)
             .load(REWARD_POOL_KEY)
@@ -782,7 +800,7 @@ mod tests {
             let user_info = TypedStore::<UserInfo, MockStorage>::attach(&deps.storage)
                 .load(user.0.as_bytes())
                 .unwrap_or(UserInfo { locked: 0, debt: 0 });
-            let rewards = query_rewards(deps, user.clone(), block);
+            let rewards = query_rewards(deps, user.clone(), Uint128(new_mint));
 
             println!("Locked: {}", user_info.locked);
             println!("Debt: {}", user_info.debt);
@@ -795,11 +813,11 @@ mod tests {
     fn query_rewards(
         deps: &Extern<MockStorage, MockApi, MockQuerier>,
         user: HumanAddr,
-        block: u64,
+        new_mint: Uint128,
     ) -> u128 {
         let query_msg = QueryMsg::Rewards {
             address: user,
-            height: block,
+            new_rewards: new_mint,
             key: "42".to_string(),
         };
 
