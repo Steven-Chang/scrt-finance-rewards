@@ -355,6 +355,27 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f6503fe142514ca4799d4c26297c4248239fe8838d827db6bd6065c6ed29a6ce"
 
 [[package]]
+name = "gov-token"
+version = "0.1.0"
+dependencies = [
+ "base64 0.12.3",
+ "bincode2",
+ "cosmwasm-schema",
+ "cosmwasm-sgx-vm",
+ "cosmwasm-std 0.10.0 (git+https://github.com/enigmampc/SecretNetwork?rev=004c6bc)",
+ "cosmwasm-storage",
+ "hex",
+ "rand_chacha 0.2.2",
+ "rand_core 0.5.1",
+ "schemars",
+ "secret-toolkit",
+ "serde",
+ "sha2 0.9.3",
+ "snafu",
+ "subtle 2.4.0",
+]
+
+[[package]]
 name = "hermit-abi"
 version = "0.1.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -425,7 +446,16 @@ dependencies = [
 ]
 
 [[package]]
-name = "lockup-incentives"
+name = "log"
+version = "0.4.14"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "51b9bbe6c47d51fc3e1a9b945965946b4c44142ab8792c50835a980d362c2710"
+dependencies = [
+ "cfg-if",
+]
+
+[[package]]
+name = "lp-staking"
 version = "0.1.0"
 dependencies = [
  "base64 0.12.3",
@@ -438,15 +468,6 @@ dependencies = [
  "serde",
  "snafu",
  "subtle 2.4.0",
-]
-
-[[package]]
-name = "log"
-version = "0.4.14"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "51b9bbe6c47d51fc3e1a9b945965946b4c44142ab8792c50835a980d362c2710"
-dependencies = [
- "cfg-if",
 ]
 
 [[package]]
@@ -839,27 +860,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
-]
-
-[[package]]
-name = "snip20-reference-impl"
-version = "0.1.0"
-dependencies = [
- "base64 0.12.3",
- "bincode2",
- "cosmwasm-schema",
- "cosmwasm-sgx-vm",
- "cosmwasm-std 0.10.0 (git+https://github.com/enigmampc/SecretNetwork?rev=004c6bc)",
- "cosmwasm-storage",
- "hex",
- "rand_chacha 0.2.2",
- "rand_core 0.5.1",
- "schemars",
- "secret-toolkit",
- "serde",
- "sha2 0.9.3",
- "snafu",
- "subtle 2.4.0",
 ]
 
 [[package]]

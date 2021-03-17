@@ -1,5 +1,5 @@
 [package]
-name = "lockup-incentives"
+name = "lp-staking"
 version = "0.1.0"
 authors = ["TomL94 <langer.tom7@gmail.com>"]
 edition = "2018"
@@ -31,6 +31,7 @@ default = []
 # for quicker tests, cargo test --lib
 # for more explicit tests, cargo test --features=backtraces
 backtraces = ["cosmwasm-std/backtraces"]
+debug-print = ["cosmwasm-std/debug-print"]
 
 [dependencies]
 secret-toolkit = { git = "https://github.com/enigmampc/secret-toolkit", branch = "debug-print" }
