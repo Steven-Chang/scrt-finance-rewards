@@ -3,18 +3,18 @@ use cosmwasm_std::{
     StdError, StdResult, Storage, Uint128, WasmMsg,
 };
 
-use crate::msg::{HandleAnswer, InitMsg, QueryAnswer, QueryMsg};
 use crate::state::{config, config_read, State};
+use scrt_finance::lp_staking_msg::LPStakingHandleMsg;
+use scrt_finance::master_msg::{MasterHandleAnswer, MasterInitMsg, MasterQueryMsg};
+use scrt_finance::master_msg::{MasterHandleMsg, MasterQueryAnswer};
 use scrt_finance::master_types::{sort_schedule, Schedule, SpySettings, WeightInfo};
-use scrt_finance::msg::CallbackMsg::NotifyAllocation;
-use scrt_finance::msg::MasterHandleMsg;
 use secret_toolkit::snip20;
 use secret_toolkit::storage::{TypedStore, TypedStoreMut};
 
 pub fn init<S: Storage, A: Api, Q: Querier>(
     deps: &mut Extern<S, A, Q>,
     env: Env,
-    msg: InitMsg,
+    msg: MasterInitMsg,
 ) -> StdResult<InitResponse> {
     // The impl. later on relies on the schedule being sorted
     let mut mint_schedule = msg.minting_schedule;
@@ -70,7 +70,7 @@ fn set_schedule<S: Storage, A: Api, Q: Querier>(
     Ok(HandleResponse {
         messages: vec![],
         log: vec![],
-        data: Some(to_binary(&HandleAnswer::Success)?),
+        data: Some(to_binary(&MasterHandleAnswer::Success)?),
     })
 }
 
@@ -122,7 +122,7 @@ fn set_weights<S: Storage, A: Api, Q: Querier>(
                 WasmMsg::Execute {
                     contract_addr: to_update.address.clone(),
                     callback_code_hash: to_update.hash,
-                    msg: to_binary(&NotifyAllocation {
+                    msg: to_binary(&LPStakingHandleMsg::NotifyAllocation {
                         amount: Uint128(rewards),
                         hook: None,
                     })?,
@@ -153,7 +153,7 @@ fn set_weights<S: Storage, A: Api, Q: Querier>(
     Ok(HandleResponse {
         messages,
         log: logs,
-        data: Some(to_binary(&HandleAnswer::Success)?),
+        data: Some(to_binary(&MasterHandleAnswer::Success)?),
     })
 }
 
@@ -175,7 +175,7 @@ fn update_allocation<S: Storage, A: Api, Q: Querier>(
     let mut rewards = 0;
     let mut messages = vec![];
     if spy_settings.last_update_block < env.block.height && spy_settings.weight > 0 {
-        // Calc amount to mint for this spy contract and push to messages
+        // Calc amount to minLPStakingHandleMsgt for this spy contract and push to messages
         rewards = get_spy_rewards(
             env.block.height,
             state.total_weight,
@@ -200,7 +200,7 @@ fn update_allocation<S: Storage, A: Api, Q: Querier>(
         WasmMsg::Execute {
             contract_addr: spy_address.clone(),
             callback_code_hash: spy_hash,
-            msg: to_binary(&NotifyAllocation {
+            msg: to_binary(&LPStakingHandleMsg::NotifyAllocation {
                 amount: Uint128(rewards),
                 hook,
             })?,
@@ -212,7 +212,7 @@ fn update_allocation<S: Storage, A: Api, Q: Querier>(
     Ok(HandleResponse {
         messages,
         log: vec![log("update_allocation", spy_address.0)],
-        data: Some(to_binary(&HandleAnswer::Success)?),
+        data: Some(to_binary(&MasterHandleAnswer::Success)?),
     })
 }
 
@@ -234,7 +234,7 @@ fn set_gov_token<S: Storage, A: Api, Q: Querier>(
     Ok(HandleResponse {
         messages: vec![],
         log: vec![log("set_gov_token", gov_addr.0)],
-        data: Some(to_binary(&HandleAnswer::Success)?),
+        data: Some(to_binary(&MasterHandleAnswer::Success)?),
     })
 }
 
@@ -254,36 +254,41 @@ fn change_admin<S: Storage, A: Api, Q: Querier>(
     Ok(HandleResponse {
         messages: vec![],
         log: vec![],
-        data: Some(to_binary(&HandleAnswer::Success)?),
+        data: Some(to_binary(&MasterHandleAnswer::Success)?),
     })
 }
 
 pub fn query<S: Storage, A: Api, Q: Querier>(
     deps: &Extern<S, A, Q>,
-    msg: QueryMsg,
+    msg: MasterQueryMsg,
 ) -> StdResult<Binary> {
     match msg {
-        QueryMsg::Admin {} => to_binary(&query_admin(deps)?),
-        QueryMsg::GovToken {} => to_binary(&query_gov_token(deps)?),
-        QueryMsg::Schedule {} => to_binary(&query_schedule(deps)?),
-        QueryMsg::SpyWeight { addr } => to_binary(&query_spy_weight(deps, addr)?),
+        MasterQueryMsg::Admin {} => to_binary(&query_admin(deps)?),
+        MasterQueryMsg::GovToken {} => to_binary(&query_gov_token(deps)?),
+        MasterQueryMsg::Schedule {} => to_binary(&query_schedule(deps)?),
+        MasterQueryMsg::SpyWeight { addr } => to_binary(&query_spy_weight(deps, addr)?),
+        MasterQueryMsg::Pending { spy_addr, block } => {
+            to_binary(&query_pending_rewards(deps, spy_addr, block))
+        }
     }
 }
 
-fn query_admin<S: Storage, A: Api, Q: Querier>(deps: &Extern<S, A, Q>) -> StdResult<QueryAnswer> {
+fn query_admin<S: Storage, A: Api, Q: Querier>(
+    deps: &Extern<S, A, Q>,
+) -> StdResult<MasterQueryAnswer> {
     let state = config_read(&deps.storage).load()?;
 
-    Ok(QueryAnswer::Admin {
+    Ok(MasterQueryAnswer::Admin {
         address: state.admin,
     })
 }
 
 fn query_gov_token<S: Storage, A: Api, Q: Querier>(
     deps: &Extern<S, A, Q>,
-) -> StdResult<QueryAnswer> {
+) -> StdResult<MasterQueryAnswer> {
     let state = config_read(&deps.storage).load()?;
 
-    Ok(QueryAnswer::GovToken {
+    Ok(MasterQueryAnswer::GovToken {
         token_addr: state.gov_token_addr,
         token_hash: state.gov_token_hash,
     })
@@ -291,10 +296,10 @@ fn query_gov_token<S: Storage, A: Api, Q: Querier>(
 
 fn query_schedule<S: Storage, A: Api, Q: Querier>(
     deps: &Extern<S, A, Q>,
-) -> StdResult<QueryAnswer> {
+) -> StdResult<MasterQueryAnswer> {
     let state = config_read(&deps.storage).load()?;
 
-    Ok(QueryAnswer::Schedule {
+    Ok(MasterQueryAnswer::Schedule {
         schedule: state.minting_schedule,
     })
 }
@@ -302,7 +307,7 @@ fn query_schedule<S: Storage, A: Api, Q: Querier>(
 fn query_spy_weight<S: Storage, A: Api, Q: Querier>(
     deps: &Extern<S, A, Q>,
     spy_address: HumanAddr,
-) -> StdResult<QueryAnswer> {
+) -> StdResult<MasterQueryAnswer> {
     let spy = TypedStore::attach(&deps.storage)
         .load(spy_address.0.as_bytes())
         .unwrap_or(SpySettings {
@@ -310,7 +315,27 @@ fn query_spy_weight<S: Storage, A: Api, Q: Querier>(
             last_update_block: 0,
         });
 
-    Ok(QueryAnswer::SpyWeight { weight: spy.weight })
+    Ok(MasterQueryAnswer::SpyWeight { weight: spy.weight })
+}
+
+fn query_pending_rewards<S: Storage, A: Api, Q: Querier>(
+    deps: &Extern<S, A, Q>,
+    spy_addr: HumanAddr,
+    block: u64,
+) -> StdResult<MasterQueryAnswer> {
+    let state = config_read(&deps.storage).load()?;
+    let spy = TypedStore::attach(&deps.storage)
+        .load(spy_addr.0.as_bytes())
+        .unwrap_or(SpySettings {
+            weight: 0,
+            last_update_block: block,
+        });
+
+    let amount = get_spy_rewards(block, state.total_weight, &state.minting_schedule, spy);
+
+    Ok(MasterQueryAnswer::Pending {
+        amount: Uint128(amount),
+    })
 }
 
 fn get_spy_rewards(

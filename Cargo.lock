@@ -458,7 +458,6 @@ dependencies = [
 name = "lp-staking"
 version = "0.1.0"
 dependencies = [
- "base64 0.12.3",
  "cosmwasm-std 0.10.0 (git+https://github.com/enigmampc/SecretNetwork?rev=004c6bc)",
  "cosmwasm-storage",
  "rand 0.7.3",
@@ -467,7 +466,6 @@ dependencies = [
  "secret-toolkit",
  "serde",
  "snafu",
- "subtle 2.4.0",
 ]
 
 [[package]]
@@ -676,12 +674,14 @@ dependencies = [
 name = "scrt-finance"
 version = "0.1.0"
 dependencies = [
+ "base64 0.12.3",
  "cosmwasm-std 0.10.0 (git+https://github.com/enigmampc/SecretNetwork?rev=004c6bc)",
  "cosmwasm-storage",
  "schemars",
  "secret-toolkit",
  "serde",
  "snafu",
+ "subtle 2.4.0",
 ]
 
 [[package]]

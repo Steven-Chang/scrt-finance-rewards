@@ -10,18 +10,21 @@ use secret_toolkit::storage::{TypedStore, TypedStoreMut};
 use secret_toolkit::utils::{pad_handle_result, pad_query_result};
 
 use crate::constants::*;
-use crate::msg::ResponseStatus::Success;
-use crate::msg::{
-    HandleAnswer, HookMsg, InitMsg, QueryAnswer, QueryMsg, ReceiveAnswer, ReceiveMsg,
+use crate::querier::query_pending;
+use crate::state::Config;
+use scrt_finance::lp_staking_msg::LPStakingResponseStatus::Success;
+use scrt_finance::lp_staking_msg::{
+    LPStakingHandleAnswer, LPStakingHandleMsg, LPStakingHookMsg, LPStakingInitMsg,
+    LPStakingQueryAnswer, LPStakingQueryMsg, LPStakingReceiveAnswer, LPStakingReceiveMsg,
 };
-use crate::state::{Config, RewardPool, TokenInfo, UserInfo};
-use crate::viewing_key::{ViewingKey, VIEWING_KEY_SIZE};
-use scrt_finance::msg::{LPStakingHandleMsg, MasterHandleMsg};
+use scrt_finance::lp_staking_types::{RewardPool, TokenInfo, UserInfo};
+use scrt_finance::master_msg::MasterHandleMsg;
+use scrt_finance::viewing_key::{ViewingKey, VIEWING_KEY_SIZE};
 
 pub fn init<S: Storage, A: Api, Q: Querier>(
     deps: &mut Extern<S, A, Q>,
     env: Env,
-    msg: InitMsg,
+    msg: LPStakingInitMsg,
 ) -> StdResult<InitResponse> {
     // Initialize state
     let prng_seed_hashed = sha_256(&msg.prng_seed.0);
@@ -36,6 +39,7 @@ pub fn init<S: Storage, A: Api, Q: Querier>(
             viewing_key: msg.viewing_key.clone(),
             prng_seed: prng_seed_hashed.to_vec(),
             is_stopped: false,
+            own_addr: env.contract.address,
         },
     )?;
 
@@ -130,13 +134,13 @@ pub fn handle<S: Storage, A: Api, Q: Querier>(
 
 pub fn query<S: Storage, A: Api, Q: Querier>(
     deps: &Extern<S, A, Q>,
-    msg: QueryMsg,
+    msg: LPStakingQueryMsg,
 ) -> StdResult<Binary> {
     let response = match msg {
-        QueryMsg::ContractStatus {} => query_contract_status(deps),
-        QueryMsg::RewardToken {} => query_reward_token(deps),
-        QueryMsg::IncentivizedToken {} => query_incentivized_token(deps),
-        QueryMsg::TokenInfo {} => query_token_info(deps),
+        LPStakingQueryMsg::ContractStatus {} => query_contract_status(deps),
+        LPStakingQueryMsg::RewardToken {} => query_reward_token(deps),
+        LPStakingQueryMsg::IncentivizedToken {} => query_incentivized_token(deps),
+        LPStakingQueryMsg::TokenInfo {} => query_token_info(deps),
         _ => authenticated_queries(deps, msg),
     };
 
@@ -145,7 +149,7 @@ pub fn query<S: Storage, A: Api, Q: Querier>(
 
 pub fn authenticated_queries<S: Storage, A: Api, Q: Querier>(
     deps: &Extern<S, A, Q>,
-    msg: QueryMsg,
+    msg: LPStakingQueryMsg,
 ) -> StdResult<Binary> {
     let (address, key) = msg.get_validation_params();
 
@@ -158,17 +162,15 @@ pub fn authenticated_queries<S: Storage, A: Api, Q: Querier>(
         key.check_viewing_key(&[0u8; VIEWING_KEY_SIZE]);
     } else if key.check_viewing_key(expected_key.unwrap().as_slice()) {
         return match msg {
-            QueryMsg::Rewards {
-                address,
-                new_rewards,
-                ..
-            } => query_pending_rewards(deps, &address, new_rewards.u128()),
-            QueryMsg::Deposit { address, .. } => query_deposit(deps, &address),
+            LPStakingQueryMsg::Rewards { address, block, .. } => {
+                query_pending_rewards(deps, &address, block)
+            }
+            LPStakingQueryMsg::Deposit { address, .. } => query_deposit(deps, &address),
             _ => panic!("This should never happen"),
         };
     }
 
-    Ok(to_binary(&QueryAnswer::QueryError {
+    Ok(to_binary(&LPStakingQueryAnswer::QueryError {
         msg: "Wrong viewing key for this address or viewing key not set".to_string(),
     })?)
 }
@@ -182,10 +184,10 @@ fn receive<S: Storage, A: Api, Q: Querier>(
     amount: u128,
     msg: Binary,
 ) -> StdResult<HandleResponse> {
-    let msg: ReceiveMsg = from_binary(&msg)?;
+    let msg: LPStakingReceiveMsg = from_binary(&msg)?;
 
     match msg {
-        ReceiveMsg::Deposit {} => deposit(deps, env, from, amount),
+        LPStakingReceiveMsg::Deposit {} => deposit(deps, env, from, amount),
     }
 }
 
@@ -193,8 +195,9 @@ fn notify_allocation<S: Storage, A: Api, Q: Querier>(
     deps: &mut Extern<S, A, Q>,
     env: Env,
     amount: u128,
-    hook: Option<HookMsg>,
+    hook: Option<LPStakingHookMsg>,
 ) -> StdResult<HandleResponse> {
+    // TODO: Verify sender (master contract)
     let reward_pool = update_rewards(deps, /*&env, &config,*/ amount)?;
 
     let mut response = Ok(HandleResponse {
@@ -205,10 +208,12 @@ fn notify_allocation<S: Storage, A: Api, Q: Querier>(
 
     if let Some(hook_msg) = hook {
         response = match hook_msg {
-            HookMsg::Deposit { from, amount } => {
+            LPStakingHookMsg::Deposit { from, amount } => {
                 deposit_hook(deps, env, reward_pool, from, amount.u128())
             }
-            HookMsg::Redeem { to, amount } => redeem_hook(deps, env, reward_pool, to, amount),
+            LPStakingHookMsg::Redeem { to, amount } => {
+                redeem_hook(deps, env, reward_pool, to, amount)
+            }
         }
     }
 
@@ -233,7 +238,7 @@ fn deposit<S: Storage, A: Api, Q: Querier>(
     update_allocation(
         env,
         config,
-        Some(to_binary(&HookMsg::Deposit {
+        Some(to_binary(&LPStakingHookMsg::Deposit {
             from,
             amount: Uint128(amount),
         })?),
@@ -279,7 +284,9 @@ fn deposit_hook<S: Storage, A: Api, Q: Querier>(
     Ok(HandleResponse {
         messages,
         log: vec![],
-        data: Some(to_binary(&ReceiveAnswer::Deposit { status: Success })?),
+        data: Some(to_binary(&LPStakingReceiveAnswer::Deposit {
+            status: Success,
+        })?),
     })
 }
 
@@ -292,7 +299,7 @@ fn redeem<S: Storage, A: Api, Q: Querier>(
     update_allocation(
         env.clone(),
         config,
-        Some(to_binary(&HookMsg::Redeem {
+        Some(to_binary(&LPStakingHookMsg::Redeem {
             to: env.message.sender,
             amount,
         })?),
@@ -364,7 +371,9 @@ fn redeem_hook<S: Storage, A: Api, Q: Querier>(
     Ok(HandleResponse {
         messages,
         log: vec![],
-        data: Some(to_binary(&HandleAnswer::Redeem { status: Success })?),
+        data: Some(to_binary(&LPStakingHandleAnswer::Redeem {
+            status: Success,
+        })?),
     })
 }
 
@@ -384,7 +393,7 @@ pub fn create_viewing_key<S: Storage, A: Api, Q: Querier>(
     Ok(HandleResponse {
         messages: vec![],
         log: vec![],
-        data: Some(to_binary(&HandleAnswer::CreateViewingKey { key })?),
+        data: Some(to_binary(&LPStakingHandleAnswer::CreateViewingKey { key })?),
     })
 }
 
@@ -401,7 +410,9 @@ pub fn set_viewing_key<S: Storage, A: Api, Q: Querier>(
     Ok(HandleResponse {
         messages: vec![],
         log: vec![],
-        data: Some(to_binary(&HandleAnswer::SetViewingKey { status: Success })?),
+        data: Some(to_binary(&LPStakingHandleAnswer::SetViewingKey {
+            status: Success,
+        })?),
     })
 }
 
@@ -420,7 +431,9 @@ fn stop_contract<S: Storage, A: Api, Q: Querier>(
     Ok(HandleResponse {
         messages: vec![],
         log: vec![],
-        data: Some(to_binary(&HandleAnswer::StopContract { status: Success })?),
+        data: Some(to_binary(&LPStakingHandleAnswer::StopContract {
+            status: Success,
+        })?),
     })
 }
 
@@ -439,7 +452,7 @@ fn resume_contract<S: Storage, A: Api, Q: Querier>(
     Ok(HandleResponse {
         messages: vec![],
         log: vec![],
-        data: Some(to_binary(&HandleAnswer::ResumeContract {
+        data: Some(to_binary(&LPStakingHandleAnswer::ResumeContract {
             status: Success,
         })?),
     })
@@ -461,7 +474,9 @@ fn change_admin<S: Storage, A: Api, Q: Querier>(
     Ok(HandleResponse {
         messages: vec![],
         log: vec![],
-        data: Some(to_binary(&HandleAnswer::ChangeAdmin { status: Success })?),
+        data: Some(to_binary(&LPStakingHandleAnswer::ChangeAdmin {
+            status: Success,
+        })?),
     })
 }
 
@@ -498,7 +513,7 @@ fn emergency_redeem<S: Storage, A: Api, Q: Querier>(
     Ok(HandleResponse {
         messages,
         log: vec![],
-        data: Some(to_binary(&HandleAnswer::EmergencyRedeem {
+        data: Some(to_binary(&LPStakingHandleAnswer::EmergencyRedeem {
             status: Success,
         })?),
     })
@@ -509,8 +524,9 @@ fn emergency_redeem<S: Storage, A: Api, Q: Querier>(
 fn query_pending_rewards<S: Storage, A: Api, Q: Querier>(
     deps: &Extern<S, A, Q>,
     address: &HumanAddr,
-    new_rewards: u128,
+    block: u64,
 ) -> StdResult<Binary> {
+    let new_rewards = query_pending(deps, block)?;
     let reward_pool = TypedStore::<RewardPool, S>::attach(&deps.storage).load(REWARD_POOL_KEY)?;
     let user = TypedStore::<UserInfo, S>::attach(&deps.storage)
         .load(address.0.as_bytes())
@@ -522,7 +538,7 @@ fn query_pending_rewards<S: Storage, A: Api, Q: Querier>(
             (new_rewards + reward_pool.residue) * REWARD_SCALE / reward_pool.inc_token_supply;
     }
 
-    to_binary(&QueryAnswer::Rewards {
+    to_binary(&LPStakingQueryAnswer::Rewards {
         // This is not necessarily accurate, since we don't validate new_rewards. It is up to
         // the UI to display accurate numbers
         rewards: Uint128(user.locked * acc_reward_per_share / REWARD_SCALE - user.debt),
@@ -537,7 +553,7 @@ fn query_deposit<S: Storage, A: Api, Q: Querier>(
         .load(address.0.as_bytes())
         .unwrap_or(UserInfo { locked: 0, debt: 0 });
 
-    to_binary(&QueryAnswer::Deposit {
+    to_binary(&LPStakingQueryAnswer::Deposit {
         deposit: Uint128(user.locked),
     })
 }
@@ -547,7 +563,7 @@ fn query_contract_status<S: Storage, A: Api, Q: Querier>(
 ) -> StdResult<Binary> {
     let config: Config = TypedStore::attach(&deps.storage).load(CONFIG_KEY)?;
 
-    to_binary(&QueryAnswer::ContractStatus {
+    to_binary(&LPStakingQueryAnswer::ContractStatus {
         is_stopped: config.is_stopped,
     })
 }
@@ -555,7 +571,7 @@ fn query_contract_status<S: Storage, A: Api, Q: Querier>(
 fn query_reward_token<S: Storage, A: Api, Q: Querier>(deps: &Extern<S, A, Q>) -> StdResult<Binary> {
     let config: Config = TypedStore::attach(&deps.storage).load(CONFIG_KEY)?;
 
-    to_binary(&QueryAnswer::RewardToken {
+    to_binary(&LPStakingQueryAnswer::RewardToken {
         token: config.reward_token,
     })
 }
@@ -565,7 +581,7 @@ fn query_incentivized_token<S: Storage, A: Api, Q: Querier>(
 ) -> StdResult<Binary> {
     let config: Config = TypedStore::attach(&deps.storage).load(CONFIG_KEY)?;
 
-    to_binary(&QueryAnswer::IncentivizedToken {
+    to_binary(&LPStakingQueryAnswer::IncentivizedToken {
         token: config.inc_token,
     })
 }
@@ -574,7 +590,7 @@ fn query_incentivized_token<S: Storage, A: Api, Q: Querier>(
 fn query_token_info<S: Storage, A: Api, Q: Querier>(deps: &Extern<S, A, Q>) -> StdResult<Binary> {
     let token_info: TokenInfo = TypedStore::attach(&deps.storage).load(TOKEN_INFO_KEY)?;
 
-    to_binary(&QueryAnswer::TokenInfo {
+    to_binary(&LPStakingQueryAnswer::TokenInfo {
         name: token_info.name,
         symbol: token_info.symbol,
         decimals: 1,
@@ -644,8 +660,8 @@ fn update_allocation(env: Env, config: Config, hook: Option<Binary>) -> StdResul
 mod tests {
     use super::*;
     use crate::msg::LPStakingHandleMsg::{Receive, Redeem, SetViewingKey};
-    use crate::msg::QueryMsg::{Deposit, Rewards};
-    use crate::msg::ReceiveMsg;
+    use crate::msg::LPStakingQueryMsg::{Deposit, Rewards};
+    use crate::msg::LPStakingReceiveMsg;
     use crate::state::SecretContract;
     use cosmwasm_std::testing::{
         mock_dependencies, MockApi, MockQuerier, MockStorage, MOCK_CONTRACT_ADDR,
@@ -654,7 +670,8 @@ mod tests {
         coins, from_binary, BlockInfo, Coin, ContractInfo, Empty, MessageInfo, StdError, WasmMsg,
     };
     use rand::Rng;
-    use scrt_finance::msg::LPStakingHandleMsg::SetViewingKey;
+    use scrt_finance::lp_staking_msg::LPStakingHandleAnswer;
+    use scrt_finance::master_msg::LPStakingHandleMsg::SetViewingKey;
     use serde::{Deserialize, Serialize};
 
     // Helper functions
@@ -668,7 +685,7 @@ mod tests {
         let mut deps = mock_dependencies(20, &[]);
         let env = mock_env("admin", &[], 1);
 
-        let init_msg = InitMsg {
+        let init_msg = LPStakingInitMsg {
             reward_token: SecretContract {
                 address: HumanAddr("scrt".to_string()),
                 contract_hash: "1".to_string(),
@@ -730,7 +747,7 @@ mod tests {
                     sender: user.clone(),
                     from: user,
                     amount: Uint128(amount),
-                    msg: to_binary(&ReceiveMsg::Deposit {}).unwrap(),
+                    msg: to_binary(&LPStakingReceiveMsg::Deposit {}).unwrap(),
                 };
 
                 (msg, "eth".to_string())
@@ -761,7 +778,7 @@ mod tests {
                     sender: user.clone(),
                     from: user,
                     amount: Uint128(amount),
-                    msg: to_binary(&ReceiveMsg::DepositRewards {}).unwrap(),
+                    msg: to_binary(&LPStakingReceiveMsg::DepositRewards {}).unwrap(),
                 };
 
                 (msg, "scrt".to_string())
@@ -815,15 +832,15 @@ mod tests {
         user: HumanAddr,
         new_mint: Uint128,
     ) -> u128 {
-        let query_msg = QueryMsg::Rewards {
+        let query_msg = LPStakingQueryMsg::Rewards {
             address: user,
             new_rewards: new_mint,
             key: "42".to_string(),
         };
 
-        let result: QueryAnswer = from_binary(&query(&deps, query_msg).unwrap()).unwrap();
+        let result: LPStakingQueryAnswer = from_binary(&query(&deps, query_msg).unwrap()).unwrap();
         match result {
-            QueryAnswer::Rewards { rewards } => rewards.u128(),
+            LPStakingQueryAnswer::Rewards { rewards } => rewards.u128(),
             _ => panic!("NOPE"),
         }
     }
@@ -881,10 +898,10 @@ mod tests {
     fn extract_reward_deposit(msg: LPStakingHandleMsg) -> u128 {
         match msg {
             LPStakingHandleMsg::Receive { amount, msg, .. } => {
-                let transfer_msg: ReceiveMsg = from_binary(&msg).unwrap();
+                let transfer_msg: LPStakingReceiveMsg = from_binary(&msg).unwrap();
 
                 match transfer_msg {
-                    ReceiveMsg::DepositRewards {} => amount.u128(),
+                    LPStakingReceiveMsg::DepositRewards {} => amount.u128(),
                     _ => 0,
                 }
             }
@@ -974,7 +991,7 @@ mod tests {
             sender: HumanAddr("admin".to_string()),
             from: HumanAddr("admin".to_string()),
             amount: Uint128(rewards),
-            msg: to_binary(&ReceiveMsg::DepositRewards {}).unwrap(),
+            msg: to_binary(&LPStakingReceiveMsg::DepositRewards {}).unwrap(),
         };
         let result = handle(
             deps,
@@ -1075,11 +1092,11 @@ mod tests {
         );
 
         let handle_response = handle(&mut deps, mock_env("admin", &[], 10), stop_msg);
-        let unwrapped_result: HandleAnswer =
+        let unwrapped_result: LPStakingHandleAnswer =
             from_binary(&handle_response.unwrap().data.unwrap()).unwrap();
         assert_eq!(
             to_binary(&unwrapped_result).unwrap(),
-            to_binary(&HandleAnswer::StopContract { status: Success }).unwrap()
+            to_binary(&LPStakingHandleAnswer::StopContract { status: Success }).unwrap()
         );
 
         let redeem_msg = LPStakingHandleMsg::Redeem { amount: None };
@@ -1094,20 +1111,20 @@ mod tests {
 
         let resume_msg = LPStakingHandleMsg::ResumeContract {};
         let handle_response = handle(&mut deps, mock_env("admin", &[], 21), resume_msg);
-        let unwrapped_result: HandleAnswer =
+        let unwrapped_result: LPStakingHandleAnswer =
             from_binary(&handle_response.unwrap().data.unwrap()).unwrap();
         assert_eq!(
             to_binary(&unwrapped_result).unwrap(),
-            to_binary(&HandleAnswer::ResumeContract { status: Success }).unwrap()
+            to_binary(&LPStakingHandleAnswer::ResumeContract { status: Success }).unwrap()
         );
 
         let redeem_msg = LPStakingHandleMsg::Redeem { amount: None };
         let handle_response = handle(&mut deps, mock_env("user", &[], 20), redeem_msg);
-        let unwrapped_result: HandleAnswer =
+        let unwrapped_result: LPStakingHandleAnswer =
             from_binary(&handle_response.unwrap().data.unwrap()).unwrap();
         assert_eq!(
             to_binary(&unwrapped_result).unwrap(),
-            to_binary(&HandleAnswer::Redeem { status: Success }).unwrap()
+            to_binary(&LPStakingHandleAnswer::Redeem { status: Success }).unwrap()
         );
     }
 
@@ -1131,11 +1148,11 @@ mod tests {
             address: HumanAddr("new_admin".to_string()),
         };
         let handle_response = handle(&mut deps, mock_env("admin", &[], 1), admin_action_msg);
-        let unwrapped_result: HandleAnswer =
+        let unwrapped_result: LPStakingHandleAnswer =
             from_binary(&handle_response.unwrap().data.unwrap()).unwrap();
         assert_eq!(
             to_binary(&unwrapped_result).unwrap(),
-            to_binary(&HandleAnswer::ChangeAdmin { status: Success }).unwrap()
+            to_binary(&LPStakingHandleAnswer::ChangeAdmin { status: Success }).unwrap()
         );
 
         let admin_action_msg = LPStakingHandleMsg::ChangeAdmin {
@@ -1154,11 +1171,11 @@ mod tests {
             address: HumanAddr("not_admin".to_string()),
         };
         let handle_response = handle(&mut deps, mock_env("new_admin", &[], 1), admin_action_msg);
-        let unwrapped_result: HandleAnswer =
+        let unwrapped_result: LPStakingHandleAnswer =
             from_binary(&handle_response.unwrap().data.unwrap()).unwrap();
         assert_eq!(
             to_binary(&unwrapped_result).unwrap(),
-            to_binary(&HandleAnswer::ChangeAdmin { status: Success }).unwrap()
+            to_binary(&LPStakingHandleAnswer::ChangeAdmin { status: Success }).unwrap()
         );
     }
 
