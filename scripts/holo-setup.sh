@@ -10,6 +10,7 @@ function wait_for_tx() {
 
 export wasm_path=build
 
+export revision="2"
 export deployer_name=holotest
 export deployer_address=$(secretcli keys show -a $deployer_name)
 echo "Deployer address: '$deployer_address'"
@@ -40,7 +41,7 @@ echo "Stored lp staking: '$lp_staking_code_id', '$lp_staking_hash'"
 
 echo "Deploying Gov Token.."
 export TX_HASH=$(
-  secretcli tx compute instantiate $token_code_id '{"admin": "'$deployer_address'", "symbol": "SEFI", "decimals": 6, "initial_balances": [], "prng_seed": "YWE=", "name": "SEFI"}' --from $deployer_name --gas 1500000 --label SEFI -b block -y |
+  secretcli tx compute instantiate $token_code_id '{"admin": "'$deployer_address'", "symbol": "SEFI", "decimals": 6, "initial_balances": [], "prng_seed": "YWE=", "name": "SEFI"}' --from $deployer_name --gas 1500000 --label SEFI-$revision -b block -y |
   jq -r .txhash
 )
 wait_for_tx "$TX_HASH" "Waiting for tx to finish on-chain..."
@@ -50,7 +51,7 @@ echo "SEFI address: '$gov_addr'"
 
 echo "Deploying Master Contract.."
 export TX_HASH=$(
-  secretcli tx compute instantiate $master_code_id '{"gov_token_addr":"'"$gov_addr"'","gov_token_hash":"'"$token_code_hash"'","minting_schedule":[{"end_block":10000000,"mint_per_block":"100000000"}]}' --from $deployer_name --gas 1500000 --label MASTER -b block -y |
+  secretcli tx compute instantiate $master_code_id '{"gov_token_addr":"'"$gov_addr"'","gov_token_hash":"'"$token_code_hash"'","minting_schedule":[{"end_block":10000000,"mint_per_block":"100000000"}]}' --from $deployer_name --gas 1500000 --label MASTER-$revision -b block -y |
   jq -r .txhash
 )
 wait_for_tx "$TX_HASH" "Waiting for tx to finish on-chain..."
@@ -70,7 +71,7 @@ echo "Master address: '$master_addr'"
 
 echo "Deploying LP Staking 1 Contract.."
 export TX_HASH=$(
-  secretcli tx compute instantiate $lp_staking_code_id '{"reward_token":{"address":"'"$gov_addr"'", "contract_hash":"'"$token_code_hash"'"},"inc_token":{"address":"'"$lp_token1"'", "contract_hash":"'"$lp_token_hash"'"},"master":{"address":"'"$master_addr"'", "contract_hash":"'"$master_code_hash"'"},"viewing_key":"'"$viewing_key"'","token_info":{"name":"lps","symbol":"LPSTAKING"},"prng_seed":"YWE="}' --from $deployer_name --gas 1500000 --label sscrt-seth-lpstake -b block -y |
+  secretcli tx compute instantiate $lp_staking_code_id '{"reward_token":{"address":"'"$gov_addr"'", "contract_hash":"'"$token_code_hash"'"},"inc_token":{"address":"'"$lp_token1"'", "contract_hash":"'"$lp_token_hash"'"},"master":{"address":"'"$master_addr"'", "contract_hash":"'"$master_code_hash"'"},"viewing_key":"'"$viewing_key"'","token_info":{"name":"lps","symbol":"LPSTAKING"},"prng_seed":"YWE="}' --from $deployer_name --gas 1500000 --label sscrt-seth-lpstake-$revision -b block -y |
   jq -r .txhash
 )
 wait_for_tx "$TX_HASH" "Waiting for tx to finish on-chain..."
@@ -79,7 +80,7 @@ lp_staking1_addr=$(secretcli query compute list-contract-by-code $lp_staking_cod
 
 echo "Deploying LP Staking 2 Contract.."
 export TX_HASH=$(
-  secretcli tx compute instantiate $lp_staking_code_id '{"reward_token":{"address":"'"$gov_addr"'", "contract_hash":"'"$token_code_hash"'"},"inc_token":{"address":"'"$lp_token2"'", "contract_hash":"'"$lp_token_hash"'"},"master":{"address":"'"$master_addr"'", "contract_hash":"'"$master_code_hash"'"},"viewing_key":"'"$viewing_key"'","token_info":{"name":"lps","symbol":"LPSTAKING"},"prng_seed":"YWE="}' --from $deployer_name --gas 1500000 --label sscrt-scrt-lpstake -b block -y |
+  secretcli tx compute instantiate $lp_staking_code_id '{"reward_token":{"address":"'"$gov_addr"'", "contract_hash":"'"$token_code_hash"'"},"inc_token":{"address":"'"$lp_token2"'", "contract_hash":"'"$lp_token_hash"'"},"master":{"address":"'"$master_addr"'", "contract_hash":"'"$master_code_hash"'"},"viewing_key":"'"$viewing_key"'","token_info":{"name":"lps","symbol":"LPSTAKING"},"prng_seed":"YWE="}' --from $deployer_name --gas 1500000 --label sscrt-scrt-lpstake-$revision -b block -y |
   jq -r .txhash
 )
 wait_for_tx "$TX_HASH" "Waiting for tx to finish on-chain..."

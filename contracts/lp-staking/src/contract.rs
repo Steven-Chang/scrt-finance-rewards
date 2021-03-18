@@ -165,7 +165,7 @@ pub fn authenticated_queries<S: Storage, A: Api, Q: Querier>(
             LPStakingQueryMsg::Rewards { address, block, .. } => {
                 query_pending_rewards(deps, &address, block)
             }
-            LPStakingQueryMsg::Deposit { address, .. } => query_deposit(deps, &address),
+            LPStakingQueryMsg::Balance { address, .. } => query_deposit(deps, &address),
             _ => panic!("This should never happen"),
         };
     }

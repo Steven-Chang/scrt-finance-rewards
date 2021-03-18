@@ -106,7 +106,7 @@ pub enum LPStakingQueryMsg {
         block: u64,
         key: String,
     },
-    Deposit {
+    Balance {
         address: HumanAddr,
         key: String,
     },
@@ -116,7 +116,7 @@ impl LPStakingQueryMsg {
     pub fn get_validation_params(&self) -> (&HumanAddr, ViewingKey) {
         match self {
             LPStakingQueryMsg::Rewards { address, key, .. } => (address, ViewingKey(key.clone())),
-            LPStakingQueryMsg::Deposit { address, key } => (address, ViewingKey(key.clone())),
+            LPStakingQueryMsg::Balance { address, key } => (address, ViewingKey(key.clone())),
             _ => panic!("This should never happen"),
         }
     }
