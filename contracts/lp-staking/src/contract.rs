@@ -197,7 +197,13 @@ fn notify_allocation<S: Storage, A: Api, Q: Querier>(
     amount: u128,
     hook: Option<LPStakingHookMsg>,
 ) -> StdResult<HandleResponse> {
-    // TODO: Verify sender (master contract)
+    let config = TypedStore::<Config, S>::attach(&deps.storage).load(CONFIG_KEY)?;
+    if env.message.sender != config.master.address && env.message.sender != config.admin {
+        return Err(StdError::generic_err(
+            "you are not allowed to call this function",
+        ));
+    }
+
     let reward_pool = update_rewards(deps, /*&env, &config,*/ amount)?;
 
     let mut response = Ok(HandleResponse {
@@ -209,10 +215,10 @@ fn notify_allocation<S: Storage, A: Api, Q: Querier>(
     if let Some(hook_msg) = hook {
         response = match hook_msg {
             LPStakingHookMsg::Deposit { from, amount } => {
-                deposit_hook(deps, env, reward_pool, from, amount.u128())
+                deposit_hook(deps, env, config, reward_pool, from, amount.u128())
             }
             LPStakingHookMsg::Redeem { to, amount } => {
-                redeem_hook(deps, env, reward_pool, to, amount)
+                redeem_hook(deps, env, config, reward_pool, to, amount)
             }
         }
     }
@@ -248,12 +254,11 @@ fn deposit<S: Storage, A: Api, Q: Querier>(
 fn deposit_hook<S: Storage, A: Api, Q: Querier>(
     deps: &mut Extern<S, A, Q>,
     _env: Env,
+    config: Config,
     mut reward_pool: RewardPool,
     from: HumanAddr,
     amount: u128,
 ) -> StdResult<HandleResponse> {
-    let config = TypedStore::<Config, S>::attach(&deps.storage).load(CONFIG_KEY)?;
-
     let mut messages: Vec<CosmosMsg> = vec![];
     let mut users_store = TypedStoreMut::<UserInfo, S>::attach(&mut deps.storage);
     let mut user = users_store
@@ -309,11 +314,11 @@ fn redeem<S: Storage, A: Api, Q: Querier>(
 fn redeem_hook<S: Storage, A: Api, Q: Querier>(
     deps: &mut Extern<S, A, Q>,
     env: Env,
+    config: Config,
     mut reward_pool: RewardPool,
     to: HumanAddr,
     amount: Option<Uint128>,
 ) -> StdResult<HandleResponse> {
-    let config = TypedStore::<Config, S>::attach(&deps.storage).load(CONFIG_KEY)?;
     let mut user = TypedStore::<UserInfo, S>::attach(&deps.storage)
         .load(to.0.as_bytes())
         .unwrap_or(UserInfo { locked: 0, debt: 0 }); // NotFound is the only possible error
