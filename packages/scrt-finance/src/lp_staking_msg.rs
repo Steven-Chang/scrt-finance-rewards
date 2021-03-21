@@ -103,8 +103,8 @@ pub enum LPStakingQueryMsg {
     // Authenticated
     Rewards {
         address: HumanAddr,
-        block: u64,
         key: String,
+        height: u64,
     },
     Balance {
         address: HumanAddr,
@@ -134,8 +134,8 @@ pub enum LPStakingQueryAnswer {
     Rewards {
         rewards: Uint128,
     },
-    Deposit {
-        deposit: Uint128,
+    Balance {
+        amount: Uint128,
     },
     ContractStatus {
         is_stopped: bool,

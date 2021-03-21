@@ -268,7 +268,7 @@ pub fn query<S: Storage, A: Api, Q: Querier>(
         MasterQueryMsg::Schedule {} => to_binary(&query_schedule(deps)?),
         MasterQueryMsg::SpyWeight { addr } => to_binary(&query_spy_weight(deps, addr)?),
         MasterQueryMsg::Pending { spy_addr, block } => {
-            to_binary(&query_pending_rewards(deps, spy_addr, block))
+            to_binary(&query_pending_rewards(deps, spy_addr, block)?)
         }
     }
 }

@@ -13,15 +13,16 @@ pub fn query_pending<S: Storage, A: Api, Q: Querier>(
 ) -> StdResult<u128> {
     let config: Config = TypedStore::attach(&deps.storage).load(CONFIG_KEY)?;
 
-    // load price form the oracle
-    match deps.querier.query(&QueryRequest::Wasm(WasmQuery::Smart {
+    let response = deps.querier.query(&QueryRequest::Wasm(WasmQuery::Smart {
         callback_code_hash: config.master.contract_hash,
         contract_addr: config.master.address,
         msg: to_binary(&MasterQueryMsg::Pending {
             spy_addr: config.own_addr,
             block,
         })?,
-    }))? {
+    }))?;
+
+    match response {
         MasterQueryAnswer::Pending { amount } => Ok(amount.u128()),
         _ => Err(StdError::generic_err(
             "something is wrong with the master contract..",

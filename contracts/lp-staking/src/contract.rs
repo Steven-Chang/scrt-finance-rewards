@@ -162,9 +162,9 @@ pub fn authenticated_queries<S: Storage, A: Api, Q: Querier>(
         key.check_viewing_key(&[0u8; VIEWING_KEY_SIZE]);
     } else if key.check_viewing_key(expected_key.unwrap().as_slice()) {
         return match msg {
-            LPStakingQueryMsg::Rewards { address, block, .. } => {
-                query_pending_rewards(deps, &address, block)
-            }
+            LPStakingQueryMsg::Rewards {
+                address, height, ..
+            } => query_pending_rewards(deps, &address, height),
             LPStakingQueryMsg::Balance { address, .. } => query_deposit(deps, &address),
             _ => panic!("This should never happen"),
         };
@@ -558,8 +558,8 @@ fn query_deposit<S: Storage, A: Api, Q: Querier>(
         .load(address.0.as_bytes())
         .unwrap_or(UserInfo { locked: 0, debt: 0 });
 
-    to_binary(&LPStakingQueryAnswer::Deposit {
-        deposit: Uint128(user.locked),
+    to_binary(&LPStakingQueryAnswer::Balance {
+        amount: Uint128(user.locked),
     })
 }
 
