@@ -10,7 +10,7 @@ function wait_for_tx() {
 
 export wasm_path=build
 
-export revision="2"
+export revision="8"
 export deployer_name=holotest
 export deployer_address=$(secretcli keys show -a $deployer_name)
 echo "Deployer address: '$deployer_address'"
@@ -22,21 +22,24 @@ export lp_token2="secret1c0rt9zj8efmr8w5hf2w0stwahgfur6j7y7x4pn" # sSCRT<->SCRT
 export lp_token_hash="ea3df9d5e17246e4ef2f2e8071c91299852a07a84c4eb85007476338b7547ce8"
 
 echo "Storing SEFI"
-secretcli tx compute store "${wasm_path}/gov_token.wasm" --from "$deployer_name" --gas 3000000 -b block -y
-token_code_id=$(secretcli query compute list-code | jq -r '.[-1]."id"')
-token_code_hash=$(secretcli query compute list-code | jq -r '.[-1]."data_hash"')
+resp=$(secretcli tx compute store "${wasm_path}/gov_token.wasm" --from "$deployer_name" --gas 3000000 -b block -y)
+echo $resp
+token_code_id=$(echo $resp | jq -r '.logs[0].events[0].attributes[] | select(.key == "code_id") | .value')
+#token_code_hash=$(secretcli query compute list-code | jq -r '.[-1]."data_hash"')
 echo "Stored token: '$token_code_id', '$token_code_hash'"
 
 echo "Storing Weight Master"
-secretcli tx compute store "${wasm_path}/weight_master.wasm" --from "$deployer_name" --gas 3000000 -b block -y
-master_code_id=$(secretcli query compute list-code | jq -r '.[-1]."id"')
-master_code_hash=$(secretcli query compute list-code | jq -r '.[-1]."data_hash"')
+resp=$(secretcli tx compute store "${wasm_path}/weight_master.wasm" --from "$deployer_name" --gas 3000000 -b block -y)
+echo $resp
+master_code_id=$(echo $resp | jq -r '.logs[0].events[0].attributes[] | select(.key == "code_id") | .value')
+#master_code_hash=$(secretcli query compute list-code | jq -r '.[-1]."data_hash"')
 echo "Stored master: '$master_code_id'"
 
 echo "Storing LP Staking"
-secretcli tx compute store "${wasm_path}/lp_staking.wasm" --from "$deployer_name" --gas 3000000 -b block -y
-lp_staking_code_id=$(secretcli query compute list-code | jq -r '.[-1]."id"')
-lp_staking_hash=$(secretcli query compute list-code | jq -r '.[-1]."data_hash"')
+resp=$(secretcli tx compute store "${wasm_path}/lp_staking.wasm" --from "$deployer_name" --gas 3000000 -b block -y)
+echo $resp
+lp_staking_code_id=$(echo $resp | jq -r '.logs[0].events[0].attributes[] | select(.key == "code_id") | .value')
+#lp_staking_hash=$(secretcli query compute list-code | jq -r '.[-1]."data_hash"')
 echo "Stored lp staking: '$lp_staking_code_id', '$lp_staking_hash'"
 
 echo "Deploying Gov Token.."
@@ -49,6 +52,9 @@ secretcli q compute tx $TX_HASH
 gov_addr=$(secretcli query compute list-contract-by-code $token_code_id | jq -r '.[-1].address')
 echo "SEFI address: '$gov_addr'"
 
+token_code_hash="$(secretcli q compute contract-hash "$gov_addr")"
+token_code_hash="${token_code_hash:2}"
+
 echo "Deploying Master Contract.."
 export TX_HASH=$(
   secretcli tx compute instantiate $master_code_id '{"gov_token_addr":"'"$gov_addr"'","gov_token_hash":"'"$token_code_hash"'","minting_schedule":[{"end_block":10000000,"mint_per_block":"100000000"}]}' --from $deployer_name --gas 1500000 --label MASTER-$revision -b block -y |
@@ -58,6 +64,9 @@ wait_for_tx "$TX_HASH" "Waiting for tx to finish on-chain..."
 secretcli q compute tx $TX_HASH
 master_addr=$(secretcli query compute list-contract-by-code $master_code_id | jq -r '.[-1].address')
 echo "Master address: '$master_addr'"
+
+master_code_hash="$(secretcli q compute contract-hash "$master_addr")"
+master_code_hash="${master_code_hash:2}"
 
 #echo "Deploying LP Token.."
 #export TX_HASH=$(
@@ -77,6 +86,9 @@ export TX_HASH=$(
 wait_for_tx "$TX_HASH" "Waiting for tx to finish on-chain..."
 secretcli q compute tx $TX_HASH
 lp_staking1_addr=$(secretcli query compute list-contract-by-code $lp_staking_code_id | jq -r '.[-1].address')
+
+lp_staking_hash="$(secretcli q compute contract-hash "$lp_staking1_addr")"
+lp_staking_hash="${lp_staking_hash:2}"
 
 echo "Deploying LP Staking 2 Contract.."
 export TX_HASH=$(
