@@ -1,9 +1,9 @@
 /// This contract implements SNIP-20 standard:
 /// https://github.com/SecretFoundation/SNIPs/blob/master/SNIP-20.md
 use cosmwasm_std::{
-    log, to_binary, Api, Binary, CanonicalAddr, CosmosMsg, Env, Extern, HandleResponse, HumanAddr,
-    InitResponse, Querier, QueryResult, ReadonlyStorage, StdError, StdResult, Storage, Uint128,
-    WasmMsg,
+    from_binary, log, to_binary, Api, Binary, CanonicalAddr, CosmosMsg, Env, Extern,
+    HandleResponse, HumanAddr, InitResponse, Querier, QueryResult, ReadonlyStorage, StdError,
+    StdResult, Storage, Uint128, WasmMsg,
 };
 
 use crate::msg::{
@@ -151,7 +151,12 @@ pub fn handle<S: Storage, A: Api, Q: Querier>(
         HandleMsg::SetMinters { minters, .. } => set_minters(deps, env, minters),
 
         // SPY
-        HandleMsg::NotifyAllocation { amount, hook } => unimplemented!(),
+        HandleMsg::NotifyAllocation { amount, hook } => notify_allocation(
+            deps,
+            env,
+            amount.u128(),
+            hook.map(|h| from_binary(&h).unwrap()),
+        ),
 
         // Other
         HandleMsg::ChangeAdmin { address, .. } => change_admin(deps, env, address),
@@ -899,13 +904,19 @@ fn notify_allocation<S: Storage, A: Api, Q: Querier>(
     TypedStoreMut::<u128, S>::attach(&mut deps.storage)
         .store(REWARD_BALANCE_KEY, &reward_balance)?;
 
+    let mut response = Ok(HandleResponse {
+        messages: vec![],
+        log: vec![],
+        data: None,
+    });
+
     if let Some(hook_msg) = hook {
-        match hook_msg {
+        response = match hook_msg {
             HookMsg::Burn { owner, amount } => burn_hook(deps, env, owner, amount),
-        }
+        };
     }
 
-    unimplemented!()
+    response
 }
 
 fn perform_transfer<T: Storage>(
