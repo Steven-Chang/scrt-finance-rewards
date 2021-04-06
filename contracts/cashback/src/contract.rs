@@ -52,6 +52,10 @@ pub fn init<S: Storage, A: Api, Q: Querier>(
 
     let prng_seed_hashed = sha_256(&msg.prng_seed.0);
 
+    TypedStoreMut::<SecretContract, S>::attach(&mut deps.storage)
+        .store(KEY_MASTER_CONTRACT, &msg.master)?;
+    TypedStoreMut::<SecretContract, S>::attach(&mut deps.storage).store(SEFI_KEY, &msg.sefi)?;
+
     let mut config = Config::from_storage(&mut deps.storage);
     config.set_constants(&Constants {
         name: "Cashback Token".to_string(),

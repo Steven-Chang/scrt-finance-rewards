@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 
 use cosmwasm_std::{Binary, HumanAddr, StdError, StdResult, Uint128};
 
-use crate::state::Tx;
+use crate::state::{SecretContract, Tx};
 use crate::viewing_key::ViewingKey;
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, JsonSchema)]
@@ -16,6 +16,8 @@ pub struct InitialBalance {
 pub struct InitMsg {
     pub initial_balances: Option<Vec<InitialBalance>>,
     pub prng_seed: Binary,
+    pub master: SecretContract,
+    pub sefi: SecretContract,
 }
 
 /// This type represents optional configuration values which can be overridden.
