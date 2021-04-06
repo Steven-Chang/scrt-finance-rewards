@@ -10,7 +10,7 @@ function wait_for_tx() {
 
 export wasm_path=build
 
-export revision="8"
+export revision="10"
 export deployer_name=holotest
 export deployer_address=$(secretcli keys show -a $deployer_name)
 echo "Deployer address: '$deployer_address'"
@@ -44,7 +44,7 @@ echo "Stored lp staking: '$lp_staking_code_id', '$lp_staking_hash'"
 
 echo "Deploying Gov Token.."
 export TX_HASH=$(
-  secretcli tx compute instantiate $token_code_id '{"admin": "'$deployer_address'", "symbol": "SEFI", "decimals": 6, "initial_balances": [], "prng_seed": "YWE=", "name": "SEFI"}' --from $deployer_name --gas 1500000 --label SEFI-$revision -b block -y |
+  secretcli tx compute instantiate $token_code_id '{"admin": "'$deployer_address'", "symbol": "SEFI", "decimals": 6, "initial_balances": [], "prng_seed": "YWE=", "name": "SEFI", "config": { "public_total_supply": true }}' --from $deployer_name --gas 1500000 --label SEFI-$revision -b block -y |
   jq -r .txhash
 )
 wait_for_tx "$TX_HASH" "Waiting for tx to finish on-chain..."

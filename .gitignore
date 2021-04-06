@@ -16,3 +16,6 @@ target/
 .cargo-ok
 
 build/
+
+node_modules/
+artifacts/
