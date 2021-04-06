@@ -16,7 +16,7 @@ use crate::state::{
     get_receiver_hash, get_transfers, read_allowance, read_viewing_key, set_receiver_hash,
     store_transfer, write_allowance, write_viewing_key, Balances, Config, Constants,
     ReadonlyBalances, ReadonlyConfig, SecretContract, KEY_MASTER_CONTRACT, REWARD_BALANCE_KEY,
-    REWARD_MULTIPLIER, SEFI_KEY,
+    SEFI_KEY,
 };
 use crate::viewing_key::{ViewingKey, VIEWING_KEY_SIZE};
 use scrt_finance::master_msg::MasterHandleMsg;
@@ -679,39 +679,16 @@ fn try_burn_from<S: Storage, A: Api, Q: Querier>(
         allowance,
     )?;
 
-    // subtract from owner account
-    let mut balances = Balances::from_storage(&mut deps.storage);
-    let mut account_balance = balances.balance(&owner_address);
-
-    if let Some(new_balance) = account_balance.checked_sub(amount) {
-        account_balance = new_balance;
-    } else {
-        return Err(StdError::generic_err(format!(
-            "insufficient funds to burn: balance={}, required={}",
-            account_balance, amount
-        )));
-    }
-    balances.set_account_balance(&owner_address, account_balance);
-
-    // remove from supply
-    let mut config = Config::from_storage(&mut deps.storage);
-    let mut total_supply = config.total_supply();
-    if let Some(new_total_supply) = total_supply.checked_sub(amount) {
-        total_supply = new_total_supply;
-    } else {
-        return Err(StdError::generic_err(
-            "You're trying to burn more than is available in the total supply",
-        ));
-    }
-    config.set_total_supply(total_supply);
-
-    let res = HandleResponse {
-        messages: vec![],
-        log: vec![],
-        data: Some(to_binary(&HandleAnswer::BurnFrom { status: Success })?),
-    };
-
-    Ok(res)
+    let master =
+        TypedStore::<SecretContract, S>::attach(&deps.storage).load(KEY_MASTER_CONTRACT)?;
+    update_allocation(
+        env,
+        master,
+        Some(to_binary(&HookMsg::Burn {
+            owner: owner.clone(),
+            amount: Uint128(amount),
+        })?),
+    )
 }
 
 fn try_increase_allowance<S: Storage, A: Api, Q: Querier>(
@@ -854,7 +831,10 @@ fn try_burn<S: Storage, A: Api, Q: Querier>(
     update_allocation(
         env,
         master,
-        Some(to_binary(&HookMsg::Burn { sender, amount })?),
+        Some(to_binary(&HookMsg::Burn {
+            owner: sender,
+            amount,
+        })?),
     )
 }
 
@@ -921,8 +901,7 @@ fn notify_allocation<S: Storage, A: Api, Q: Querier>(
 
     if let Some(hook_msg) = hook {
         match hook_msg {
-            HookMsg::Burn { sender, amount } => {} //burn_hook(deps, env, sender, amount),
-            HookMsg::BurnFrom { .. } => {}
+            HookMsg::Burn { owner, amount } => burn_hook(deps, env, owner, amount),
         }
     }
 

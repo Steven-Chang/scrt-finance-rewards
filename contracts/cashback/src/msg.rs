@@ -140,15 +140,7 @@ pub enum HandleMsg {
 #[derive(Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum HookMsg {
-    Burn {
-        sender: HumanAddr,
-        amount: Uint128,
-    },
-    BurnFrom {
-        sender: HumanAddr,
-        owner: HumanAddr,
-        amount: Uint128,
-    },
+    Burn { owner: HumanAddr, amount: Uint128 },
 }
 
 #[derive(Serialize, Deserialize, JsonSchema, Debug)]
