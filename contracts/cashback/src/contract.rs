@@ -7,18 +7,20 @@ use cosmwasm_std::{
 };
 
 use crate::msg::{
-    space_pad, ContractStatusLevel, HandleAnswer, HandleMsg, InitMsg, QueryAnswer, QueryMsg,
-    ResponseStatus::Success,
+    space_pad, ContractStatusLevel, HandleAnswer, HandleMsg, HookMsg, InitMsg, QueryAnswer,
+    QueryMsg, ResponseStatus::Success,
 };
 use crate::rand::sha_256;
 use crate::receiver::Snip20ReceiveMsg;
 use crate::state::{
     get_receiver_hash, get_transfers, read_allowance, read_viewing_key, set_receiver_hash,
     store_transfer, write_allowance, write_viewing_key, Balances, Config, Constants,
-    ReadonlyBalances, ReadonlyConfig,
+    ReadonlyBalances, ReadonlyConfig, SecretContract, KEY_MASTER_CONTRACT, REWARD_BALANCE_KEY,
+    REWARD_MULTIPLIER, SEFI_KEY,
 };
 use crate::viewing_key::{ViewingKey, VIEWING_KEY_SIZE};
 use scrt_finance::master_msg::MasterHandleMsg;
+use secret_toolkit::storage::{TypedStore, TypedStoreMut};
 
 /// We make sure that responses from `handle` are padded to a multiple of this size.
 pub const RESPONSE_BLOCK_SIZE: usize = 256;
@@ -842,7 +844,23 @@ fn try_burn<S: Storage, A: Api, Q: Querier>(
     env: Env,
     amount: Uint128,
 ) -> StdResult<HandleResponse> {
-    let sender_address = deps.api.canonical_address(&env.message.sender)?;
+    let master =
+        TypedStore::<SecretContract, S>::attach(&deps.storage).load(KEY_MASTER_CONTRACT)?;
+    let sender = env.message.sender.clone();
+    update_allocation(
+        env,
+        master,
+        Some(to_binary(&HookMsg::Burn { sender, amount })?),
+    )
+}
+
+fn burn_hook<S: Storage, A: Api, Q: Querier>(
+    deps: &mut Extern<S, A, Q>,
+    _env: Env,
+    burner: HumanAddr,
+    amount: Uint128,
+) -> StdResult<HandleResponse> {
+    let sender_address = deps.api.canonical_address(&burner)?;
     let amount = amount.u128();
 
     let mut balances = Balances::from_storage(&mut deps.storage);
@@ -859,8 +877,11 @@ fn try_burn<S: Storage, A: Api, Q: Querier>(
 
     balances.set_account_balance(&sender_address, account_balance);
 
-    let mut config = Config::from_storage(&mut deps.storage);
-    let mut total_supply = config.total_supply();
+    let mut total_supply = Config::from_storage(&mut deps.storage).total_supply();
+
+    // Create a message to transfer eligible SEFI
+    let messages = transfer_reward(deps, burner, amount, total_supply)?;
+
     if let Some(new_total_supply) = total_supply.checked_sub(amount) {
         total_supply = new_total_supply;
     } else {
@@ -868,15 +889,40 @@ fn try_burn<S: Storage, A: Api, Q: Querier>(
             "You're trying to burn more than is available in the total supply",
         ));
     }
-    config.set_total_supply(total_supply);
+    Config::from_storage(&mut deps.storage).set_total_supply(total_supply);
 
     let res = HandleResponse {
-        messages: vec![],
+        messages,
         log: vec![],
         data: Some(to_binary(&HandleAnswer::Burn { status: Success })?),
     };
 
     Ok(res)
+}
+
+fn notify_allocation<S: Storage, A: Api, Q: Querier>(
+    deps: &mut Extern<S, A, Q>,
+    env: Env,
+    amount: u128,
+    hook: Option<HookMsg>,
+) -> StdResult<HandleResponse> {
+    let mut reward_balance = TypedStoreMut::<u128, S>::attach(&mut deps.storage)
+        .load(REWARD_BALANCE_KEY)
+        .unwrap_or(0);
+
+    reward_balance += amount;
+
+    TypedStoreMut::<u128, S>::attach(&mut deps.storage)
+        .store(REWARD_BALANCE_KEY, &reward_balance)?;
+
+    if let Some(hook_msg) = hook {
+        match hook_msg {
+            HookMsg::Burn { sender, amount } => {} //burn_hook(deps, env, sender, amount),
+            HookMsg::BurnFrom { .. } => {}
+        }
+    }
+
+    unimplemented!()
 }
 
 fn perform_transfer<T: Storage>(
@@ -926,12 +972,11 @@ fn check_if_admin<S: Storage>(config: &Config<S>, account: &HumanAddr) -> StdRes
     Ok(())
 }
 
-fn update_allocation<S: ReadonlyStorage>(
+fn update_allocation(
     env: Env,
-    config: ReadonlyConfig<S>,
+    master: SecretContract,
     hook: Option<Binary>,
 ) -> StdResult<HandleResponse> {
-    let master = config.master_contract();
     Ok(HandleResponse {
         messages: vec![WasmMsg::Execute {
             contract_addr: master.address,
@@ -947,6 +992,34 @@ fn update_allocation<S: ReadonlyStorage>(
         log: vec![],
         data: None,
     })
+}
+
+fn transfer_reward<S: Storage, A: Api, Q: Querier>(
+    deps: &mut Extern<S, A, Q>,
+    burner: HumanAddr,
+    burn_amount: u128,
+    total_supply: u128,
+) -> StdResult<Vec<CosmosMsg>> {
+    let reward_balance = TypedStore::<u128, S>::attach(&deps.storage)
+        .load(REWARD_BALANCE_KEY)
+        .unwrap_or(0);
+    let sefi = TypedStore::<SecretContract, S>::attach(&deps.storage)
+        .load(SEFI_KEY)
+        .unwrap();
+    let reward = burn_amount * reward_balance / total_supply;
+
+    if reward > 0 {
+        Ok(vec![secret_toolkit::snip20::transfer_msg(
+            burner,
+            Uint128(reward),
+            None,
+            1,
+            sefi.hash,
+            sefi.address,
+        )?])
+    } else {
+        Ok(vec![])
+    }
 }
 
 #[cfg(test)]

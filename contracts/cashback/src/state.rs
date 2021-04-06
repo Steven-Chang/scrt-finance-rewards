@@ -31,6 +31,12 @@ pub const PREFIX_ALLOWANCES: &[u8] = b"allowances";
 pub const PREFIX_VIEW_KEY: &[u8] = b"viewingkey";
 pub const PREFIX_RECEIVERS: &[u8] = b"receivers";
 
+// TypedStorage
+pub const REWARD_BALANCE_KEY: &[u8] = b"rewardbalance";
+pub const SEFI_KEY: &[u8] = b"sefi";
+
+pub const REWARD_MULTIPLIER: u128 = 1_000_000_000_000; // 10 ^ 12
+
 // Note that id is a globally incrementing counter.
 // Since it's 64 bits long, even at 50 tx/s it would take
 // over 11 billion years for it to rollback. I'm pretty sure
