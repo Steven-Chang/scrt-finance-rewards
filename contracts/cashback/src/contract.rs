@@ -139,17 +139,17 @@ pub fn handle<S: Storage, A: Api, Q: Querier>(
         HandleMsg::BurnFrom { owner, amount, .. } => try_burn_from(deps, env, &owner, amount),
         HandleMsg::Mint {
             recipient, amount, ..
-        } => try_mint(deps, env, recipient, amount),),
+        } => try_mint(deps, env, recipient, amount),
         HandleMsg::AddMinters { minters, .. } => add_minters(deps, env, minters),
         HandleMsg::RemoveMinters { minters, .. } => remove_minters(deps, env, minters),
         HandleMsg::SetMinters { minters, .. } => set_minters(deps, env, minters),
 
         // SPY
-        HandleMsg::NotifyAllocation { amount, hook } => {}
+        HandleMsg::NotifyAllocation { amount, hook } => unimplemented!(),
 
         // Other
         HandleMsg::ChangeAdmin { address, .. } => change_admin(deps, env, address),
-        HandleMsg::SetContractStatus { level, .. } => set_contract_status(deps, env, level
+        HandleMsg::SetContractStatus { level, .. } => set_contract_status(deps, env, level),
     };
 
     pad_response(response)
