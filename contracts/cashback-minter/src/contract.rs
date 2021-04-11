@@ -25,7 +25,14 @@ pub fn handle<S: Storage, A: Api, Q: Querier>(
     env: Env,
     msg: HandleMsg,
 ) -> StdResult<HandleResponse> {
-    match msg {}
+    match msg {
+        HandleMsg::ReceiveSwapData {
+            asset_in,
+            asset_out,
+            account,
+        } => {}
+    };
+    unimplemented!()
 }
 
 pub fn query<S: Storage, A: Api, Q: Querier>(
