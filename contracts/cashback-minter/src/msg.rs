@@ -1,4 +1,5 @@
 use crate::asset::Asset;
+use crate::state::Pair;
 use cosmwasm_std::HumanAddr;
 use schemars::JsonSchema;
 use scrt_finance::types::SecretContract;
@@ -7,7 +8,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Serialize, Deserialize, JsonSchema)]
 pub struct InitMsg {
     pub sscrt_addr: HumanAddr,
-    pub paired_tokens: Vec<HumanAddr>,
+    pub pairs: Vec<Pair>,
     pub cashback: SecretContract,
 }
 
@@ -19,11 +20,16 @@ pub enum HandleMsg {
         asset_out: Asset,
         account: HumanAddr,
     },
+    SetPairs {
+        pairs: Vec<Pair>,
+    },
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
-pub enum QueryMsg {}
+pub enum QueryMsg {
+    Pairs {},
+}
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, JsonSchema, Debug)]
 #[serde(rename_all = "snake_case")]

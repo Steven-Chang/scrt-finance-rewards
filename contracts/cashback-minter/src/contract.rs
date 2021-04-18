@@ -1,6 +1,6 @@
 use cosmwasm_std::{
     Api, Binary, Env, Extern, HandleResponse, HumanAddr, InitResponse, Querier, ReadonlyStorage,
-    StdResult, Storage, Uint128,
+    StdError, StdResult, Storage, Uint128,
 };
 
 use crate::asset::{Asset, AssetInfo};
@@ -16,12 +16,24 @@ pub fn init<S: Storage, A: Api, Q: Querier>(
     env: Env,
     msg: InitMsg,
 ) -> StdResult<InitResponse> {
-    TypedStoreMut::<HumanAddr, S>::attach(&mut deps.storage).store(KEY_SSCRT, &msg.sscrt_addr)?;
+    TypedStoreMut::<HumanAddr, S>::attach(&mut deps.storage)
+        .store(KEY_SSCRT, &msg.sscrt_addr.clone())?;
     TypedStoreMut::<SecretContract, S>::attach(&mut deps.storage)
         .store(KEY_SSCRT, &msg.cashback)?;
 
     let mut supported_tokens = PrefixedStorage::new(PREFIX_PAIRED_TOKENS, &mut deps.storage);
-    for token in msg.paired_tokens {
+    for pair in msg.pairs {
+        // Get the token that is not sSCRT
+        let token;
+        if pair.asset_0 == msg.sscrt_addr {
+            token = pair.asset_1;
+        } else if pair.asset_1 == msg.sscrt_addr {
+            token = pair.asset_0;
+        } else {
+            return Err(StdError::generic_err(
+                "invalid pair! One of the sides has to be sSCRT",
+            ));
+        }
         // Value is irrelevant, just marking that token as supported
         supported_tokens.set(token.0.as_bytes(), &[1]);
     }
@@ -40,6 +52,7 @@ pub fn handle<S: Storage, A: Api, Q: Querier>(
             asset_out,
             account,
         } => receive_swap_data(deps, asset_in, asset_out, account),
+        HandleMsg::SetPairs { pairs } => unimplemented!(),
     }
 }
 
@@ -123,5 +136,7 @@ pub fn query<S: Storage, A: Api, Q: Querier>(
     deps: &Extern<S, A, Q>,
     msg: QueryMsg,
 ) -> StdResult<Binary> {
-    match msg {}
+    match msg {
+        QueryMsg::Pairs { .. } => unimplemented!(),
+    }
 }
