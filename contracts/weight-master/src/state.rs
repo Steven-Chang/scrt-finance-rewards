@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 
 use cosmwasm_std::{HumanAddr, Storage};
 use cosmwasm_storage::{singleton, singleton_read, ReadonlySingleton, Singleton};
-use scrt_finance::master_types::Schedule;
+use scrt_finance::types::Schedule;
 
 pub static CONFIG_KEY: &[u8] = b"config";
 

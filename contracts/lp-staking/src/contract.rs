@@ -17,8 +17,8 @@ use scrt_finance::lp_staking_msg::{
     LPStakingHandleAnswer, LPStakingHandleMsg, LPStakingHookMsg, LPStakingInitMsg,
     LPStakingQueryAnswer, LPStakingQueryMsg, LPStakingReceiveAnswer, LPStakingReceiveMsg,
 };
-use scrt_finance::lp_staking_types::{RewardPool, TokenInfo, UserInfo};
 use scrt_finance::master_msg::MasterHandleMsg;
+use scrt_finance::types::{RewardPool, TokenInfo, UserInfo};
 use scrt_finance::viewing_key::{ViewingKey, VIEWING_KEY_SIZE};
 
 pub fn init<S: Storage, A: Api, Q: Querier>(

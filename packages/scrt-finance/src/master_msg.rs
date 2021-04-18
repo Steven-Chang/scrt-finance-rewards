@@ -1,4 +1,4 @@
-use crate::master_types::{Schedule, WeightInfo};
+use crate::types::{Schedule, WeightInfo};
 use cosmwasm_std::{Binary, HumanAddr, Uint128};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};

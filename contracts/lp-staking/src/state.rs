@@ -1,5 +1,5 @@
 use cosmwasm_std::HumanAddr;
-use scrt_finance::lp_staking_types::SecretContract;
+use scrt_finance::types::SecretContract;
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Clone)]

@@ -1,4 +1,4 @@
-use crate::lp_staking_types::{SecretContract, TokenInfo};
+use crate::types::{SecretContract, TokenInfo};
 use crate::viewing_key::ViewingKey;
 use cosmwasm_std::{Binary, HumanAddr, Uint128};
 use schemars::JsonSchema;

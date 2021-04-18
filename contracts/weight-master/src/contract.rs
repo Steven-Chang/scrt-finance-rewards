@@ -7,7 +7,7 @@ use crate::state::{config, config_read, State};
 use scrt_finance::lp_staking_msg::LPStakingHandleMsg;
 use scrt_finance::master_msg::{MasterHandleAnswer, MasterInitMsg, MasterQueryMsg};
 use scrt_finance::master_msg::{MasterHandleMsg, MasterQueryAnswer};
-use scrt_finance::master_types::{sort_schedule, Schedule, SpySettings, WeightInfo};
+use scrt_finance::types::{sort_schedule, Schedule, SpySettings, WeightInfo};
 use secret_toolkit::snip20;
 use secret_toolkit::storage::{TypedStore, TypedStoreMut};
 
