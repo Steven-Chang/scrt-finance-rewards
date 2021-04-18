@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 
 pub const KEY_SSCRT: &[u8] = b"sscrt";
 pub const KEY_CSHBK: &[u8] = b"cshbk";
+pub const KEY_ADMIN: &[u8] = b"admin";
 pub const PREFIX_PAIRED_TOKENS: &[u8] = b"pairedtokens";
 
 #[derive(Serialize, Deserialize, Clone, Default, Debug, PartialEq, Eq, JsonSchema)]

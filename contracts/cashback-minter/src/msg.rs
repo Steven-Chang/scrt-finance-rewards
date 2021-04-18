@@ -20,8 +20,16 @@ pub enum HandleMsg {
         asset_out: Asset,
         account: HumanAddr,
     },
-    SetPairs {
+
+    // Admin
+    AddPairs {
         pairs: Vec<Pair>,
+    },
+    RemovePairs {
+        pairs: Vec<Pair>,
+    },
+    SetAdmin {
+        address: HumanAddr,
     },
 }
 
