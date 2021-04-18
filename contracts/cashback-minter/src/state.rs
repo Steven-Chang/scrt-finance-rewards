@@ -1,9 +1,6 @@
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-use cosmwasm_std::{HumanAddr, Storage};
-use cosmwasm_storage::{singleton, singleton_read, ReadonlySingleton, Singleton};
-use scrt_finance::master_types::Schedule;
-
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
-pub struct State {}
+pub const KEY_SSCRT: &[u8] = b"sscrt";
+pub const KEY_CSHBK: &[u8] = b"cshbk";
+pub const PREFIX_PAIRED_TOKENS: &[u8] = b"pairedtokens";

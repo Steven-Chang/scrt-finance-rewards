@@ -1,3 +1,4 @@
+/// This file is based on https://github.com/enigmampc/SecretSwap/blob/5bb072d01b21899344b018ab86bb9a4f3fa1d848/packages/secretswap/src/asset.rs
 use cosmwasm_std::{
     to_binary, Api, BankMsg, Coin, CosmosMsg, Env, Extern, HumanAddr, Querier, StdError, StdResult,
     Storage, Uint128, WasmMsg,
@@ -6,8 +7,6 @@ use schemars::JsonSchema;
 use secret_toolkit::snip20::HandleMsg;
 use serde::{Deserialize, Serialize};
 use std::fmt;
-
-/// This file is based on https://github.com/enigmampc/SecretSwap/blob/5bb072d01b21899344b018ab86bb9a4f3fa1d848/packages/secretswap/src/asset.rs
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct Asset {

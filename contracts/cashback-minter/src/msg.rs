@@ -1,10 +1,15 @@
 use crate::asset::Asset;
-use cosmwasm_std::{Binary, HumanAddr, StdError, StdResult, Uint128};
+use cosmwasm_std::HumanAddr;
 use schemars::JsonSchema;
+use scrt_finance::types::SecretContract;
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, JsonSchema)]
-pub struct InitMsg {}
+pub struct InitMsg {
+    pub sscrt_addr: HumanAddr,
+    pub paired_tokens: Vec<HumanAddr>,
+    pub cashback: SecretContract,
+}
 
 #[derive(Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
