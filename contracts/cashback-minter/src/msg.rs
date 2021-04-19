@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Serialize, Deserialize, JsonSchema)]
 pub struct InitMsg {
     pub sscrt_addr: HumanAddr,
-    pub pairs: Vec<Pair>,
+    pub pairs: Option<Vec<Pair>>,
     pub cashback: SecretContract,
 }
 
@@ -29,6 +29,9 @@ pub enum HandleMsg {
         pairs: Vec<Pair>,
     },
     SetAdmin {
+        address: HumanAddr,
+    },
+    SetDataSender {
         address: HumanAddr,
     },
 }
