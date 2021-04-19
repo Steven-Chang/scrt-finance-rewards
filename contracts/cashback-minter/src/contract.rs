@@ -1,12 +1,12 @@
 use cosmwasm_std::{
-    Api, Binary, Env, Extern, HandleResponse, HumanAddr, InitResponse, Querier, ReadonlyStorage,
-    StdError, StdResult, Storage, Uint128,
+    to_binary, Api, Binary, Env, Extern, HandleResponse, HumanAddr, InitResponse, Querier,
+    ReadonlyStorage, StdError, StdResult, Storage, Uint128,
 };
 
 use crate::asset::{Asset, AssetInfo};
-use crate::msg::{HandleMsg, InitMsg, QueryMsg};
+use crate::msg::{HandleMsg, InitMsg, QueryAnswer, QueryMsg};
 use crate::state::{Pair, KEY_ADMIN, KEY_CSHBK, KEY_SSCRT, PREFIX_PAIRED_TOKENS};
-use cosmwasm_storage::PrefixedStorage;
+use cosmwasm_storage::{PrefixedStorage, ReadonlyPrefixedStorage};
 use scrt_finance::types::SecretContract;
 use secret_toolkit::snip20;
 use secret_toolkit::storage::{TypedStore, TypedStoreMut};
@@ -19,7 +19,7 @@ pub fn init<S: Storage, A: Api, Q: Querier>(
     TypedStoreMut::<HumanAddr, S>::attach(&mut deps.storage)
         .store(KEY_SSCRT, &msg.sscrt_addr.clone())?;
     TypedStoreMut::<SecretContract, S>::attach(&mut deps.storage)
-        .store(KEY_SSCRT, &msg.cashback)?;
+        .store(KEY_CSHBK, &msg.cashback)?;
     TypedStoreMut::<HumanAddr, S>::attach(&mut deps.storage)
         .store(KEY_ADMIN, &env.message.sender)?;
 
@@ -53,6 +53,7 @@ fn receive_swap_data<S: Storage, A: Api, Q: Querier>(
     asset_out: Asset,
     account: HumanAddr,
 ) -> StdResult<HandleResponse> {
+    // TODO: Check sender - has to be the proxy contract
     let amount = get_eligibility(deps, asset_in, asset_out)?;
 
     let mut messages = vec![];
@@ -81,7 +82,7 @@ fn add_pairs<S: Storage, A: Api, Q: Querier>(
     env: Env,
     pairs: Vec<Pair>,
 ) -> StdResult<HandleResponse> {
-    verify_admin(deps, env)?;
+    enforce_admin(deps, env)?;
     set_pairs_to_storage(deps, pairs)?;
 
     Ok(HandleResponse {
@@ -96,7 +97,7 @@ fn remove_pairs<S: Storage, A: Api, Q: Querier>(
     env: Env,
     pairs: Vec<Pair>,
 ) -> StdResult<HandleResponse> {
-    verify_admin(deps, env)?;
+    enforce_admin(deps, env)?;
     remove_pairs_from_storage(deps, pairs)?;
 
     Ok(HandleResponse {
@@ -111,7 +112,7 @@ fn set_admin<S: Storage, A: Api, Q: Querier>(
     env: Env,
     address: HumanAddr,
 ) -> StdResult<HandleResponse> {
-    verify_admin(deps, env)?;
+    enforce_admin(deps, env)?;
 
     TypedStoreMut::<HumanAddr, S>::attach(&mut deps.storage).store(KEY_ADMIN, &address)?;
 
@@ -173,7 +174,7 @@ fn set_pairs_to_storage<S: Storage, A: Api, Q: Querier>(
     deps: &mut Extern<S, A, Q>,
     pairs: Vec<Pair>,
 ) -> StdResult<()> {
-    let sscrt_addr = TypedStoreMut::<HumanAddr, S>::attach(&mut deps.storage).load(KEY_SSCRT)?;
+    let sscrt_addr = TypedStore::<HumanAddr, S>::attach(&deps.storage).load(KEY_SSCRT)?;
 
     let mut supported_tokens = PrefixedStorage::new(PREFIX_PAIRED_TOKENS, &mut deps.storage);
     for pair in pairs {
@@ -220,7 +221,7 @@ fn remove_pairs_from_storage<S: Storage, A: Api, Q: Querier>(
     Ok(())
 }
 
-fn verify_admin<S: Storage, A: Api, Q: Querier>(
+fn enforce_admin<S: Storage, A: Api, Q: Querier>(
     deps: &mut Extern<S, A, Q>,
     env: Env,
 ) -> StdResult<()> {
@@ -233,11 +234,56 @@ fn verify_admin<S: Storage, A: Api, Q: Querier>(
     Err(StdError::generic_err("not an admin!"))
 }
 
+// Query functions
+
 pub fn query<S: Storage, A: Api, Q: Querier>(
     deps: &Extern<S, A, Q>,
     msg: QueryMsg,
 ) -> StdResult<Binary> {
     match msg {
-        QueryMsg::Pairs { .. } => unimplemented!(),
+        QueryMsg::IsSupported { pair } => query_is_supported(deps, pair),
+        QueryMsg::Cashback {} => query_cashback(deps),
+        QueryMsg::Admin {} => query_admin(deps),
     }
+}
+
+fn query_is_supported<S: Storage, A: Api, Q: Querier>(
+    deps: &Extern<S, A, Q>,
+    pair: Pair,
+) -> StdResult<Binary> {
+    let sscrt_addr = TypedStore::<HumanAddr, S>::attach(&deps.storage).load(KEY_SSCRT)?;
+
+    let supported_tokens = ReadonlyPrefixedStorage::new(PREFIX_PAIRED_TOKENS, &deps.storage);
+
+    // Get the token that is not sSCRT
+    let token;
+    if pair.asset_0 == sscrt_addr {
+        token = pair.asset_1;
+    } else if pair.asset_1 == sscrt_addr {
+        token = pair.asset_0;
+    } else {
+        // If no sSCRT => not supported
+        return to_binary(&QueryAnswer::IsSupported {
+            is_supported: false,
+        });
+    }
+
+    let is_supported = supported_tokens.get(token.0.as_bytes());
+    to_binary(&QueryAnswer::IsSupported {
+        is_supported: is_supported.is_some(),
+    })
+}
+
+fn query_cashback<S: Storage, A: Api, Q: Querier>(deps: &Extern<S, A, Q>) -> StdResult<Binary> {
+    let cashback: SecretContract = TypedStore::attach(&deps.storage).load(KEY_CSHBK)?;
+
+    to_binary(&QueryAnswer::Cashback {
+        address: cashback.address,
+    })
+}
+
+fn query_admin<S: Storage, A: Api, Q: Querier>(deps: &Extern<S, A, Q>) -> StdResult<Binary> {
+    let admin: HumanAddr = TypedStore::attach(&deps.storage).load(KEY_ADMIN)?;
+
+    to_binary(&QueryAnswer::Admin { address: admin })
 }

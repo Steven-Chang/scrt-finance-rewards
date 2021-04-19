@@ -36,7 +36,17 @@ pub enum HandleMsg {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum QueryMsg {
-    Pairs {},
+    IsSupported { pair: Pair },
+    Cashback {},
+    Admin {},
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum QueryAnswer {
+    IsSupported { is_supported: bool },
+    Cashback { address: HumanAddr },
+    Admin { address: HumanAddr },
 }
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, JsonSchema, Debug)]
