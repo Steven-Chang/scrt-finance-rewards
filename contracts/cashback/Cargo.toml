@@ -1,7 +1,7 @@
 [package]
 name = "cashback-token"
 version = "0.1.0"
-authors = ["Tom <langer.tom7@gmail.com>"]
+authors = ["TomL94 <langer.tom7@gmail.com>"]
 edition = "2018"
 
 exclude = [
@@ -16,9 +16,10 @@ exclude = [
 crate-type = ["cdylib", "rlib"]
 
 [features]
+default = []
 # for quicker tests, cargo test --lib
 # for more explicit tests, cargo test --features=backtraces
-backtraces = ["cosmwasm-std/backtraces", "cosmwasm-vm/backtraces"]
+backtraces = ["cosmwasm-std/backtraces"]
 
 [dependencies]
 secret-toolkit = { git = "https://github.com/enigmampc/secret-toolkit", branch = "debug-print" }

@@ -31,9 +31,6 @@ pub enum HandleMsg {
     SetAdmin {
         address: HumanAddr,
     },
-    SetDataSender {
-        address: HumanAddr,
-    },
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
