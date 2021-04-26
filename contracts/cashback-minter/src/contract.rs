@@ -5,6 +5,7 @@ use cosmwasm_std::{
 
 use crate::asset::{Asset, AssetInfo};
 use crate::msg::{HandleMsg, InitMsg, QueryAnswer, QueryMsg, ResponseStatus};
+use crate::querier::query_pair;
 use crate::state::{Pair, KEY_ADMIN, KEY_CSHBK, KEY_SSCRT, PREFIX_PAIRED_TOKENS};
 use cosmwasm_storage::{PrefixedStorage, ReadonlyPrefixedStorage};
 use scrt_finance::types::SecretContract;
@@ -24,7 +25,13 @@ pub fn init<S: Storage, A: Api, Q: Querier>(
         .store(KEY_ADMIN, &env.message.sender)?;
 
     if let Some(pairs) = msg.pairs {
-        set_pairs_to_storage(deps, pairs)?;
+        let pair_hash = msg.pair_contract_hash.ok_or(|| {
+            StdError::generic_err(
+                "when providing pairs, you have to provide pair contract hash as well",
+            )
+        })?;
+
+        set_pairs_to_storage(deps, pairs, pair_hash)?;
     }
 
     Ok(InitResponse::default())
@@ -146,10 +153,10 @@ fn get_eligibility<S: Storage, A: Api, Q: Querier>(
     let scrt: Asset;
     let paired: Asset;
 
-    if is_scrt(deps, asset_in.clone())? {
+    if is_scrt(deps, asset_in.info.clone())? {
         scrt = asset_in;
         paired = asset_out;
-    } else if is_scrt(deps, asset_out.clone())? {
+    } else if is_scrt(deps, asset_out.info.clone())? {
         scrt = asset_out;
         paired = asset_in;
     } else {
@@ -171,8 +178,8 @@ fn get_eligibility<S: Storage, A: Api, Q: Querier>(
 }
 
 fn is_scrt<S: Storage, A: Api, Q: Querier>(
-    deps: &mut Extern<S, A, Q>,
-    asset: Asset,
+    deps: &Extern<S, A, Q>,
+    asset: AssetInfo,
 ) -> StdResult<bool> {
     match asset.info {
         AssetInfo::Token { contract_addr, .. } => {
@@ -185,12 +192,46 @@ fn is_scrt<S: Storage, A: Api, Q: Querier>(
 
 fn set_pairs_to_storage<S: Storage, A: Api, Q: Querier>(
     deps: &mut Extern<S, A, Q>,
-    pairs: Vec<Pair>,
+    pairs: Vec<HumanAddr>,
+    // pairs: Vec<Pair>,
+    pair_hash: String,
 ) -> StdResult<()> {
     let sscrt_addr = TypedStore::<HumanAddr, S>::attach(&deps.storage).load(KEY_SSCRT)?;
 
     let mut supported_tokens = PrefixedStorage::new(PREFIX_PAIRED_TOKENS, &mut deps.storage);
     for pair in pairs {
+        let pair_info = query_pair(&deps.querier, pair, pair_hash.clone())?;
+
+        match pair_info.asset_infos[0] {
+            AssetInfo::Token { .. } => {}
+            AssetInfo::NativeToken { .. } => {}
+        }
+
+        let token;
+        if is_scrt(&deps, pair_info.asset_infos[0].clone())? {
+            token = match pair_info.asset_infos[1] {
+                AssetInfo::Token { contract_addr, .. } => contract_addr,
+                AssetInfo::NativeToken { .. } => match pair_info.asset_infos[0] {
+                    AssetInfo::Token { contract_addr, .. } => contract_addr,
+                    AssetInfo::NativeToken { .. } => {
+                        return Err(StdError::generic_err(
+                            "two native tokens? something went wrong",
+                        ))
+                    }
+                },
+            }
+        } else if is_scrt(&deps, pair_info.asset_infos[1].clone())? {
+            token = match pair_info.asset_infos[0] {
+                AssetInfo::Token { contract_addr, .. } => contract_addr,
+                AssetInfo::NativeToken { .. } =>{
+                        return Err(StdError::generic_err(
+                            "two native tokens? something went wrong",
+                        ));
+                    },
+                };
+            }
+        }
+
         // Get the token that is not sSCRT
         let token;
         if pair.asset_0 == sscrt_addr {
