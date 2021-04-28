@@ -1,12 +1,14 @@
 use cosmwasm_std::{
-    log, to_binary, Api, Binary, Env, Extern, HandleResponse, HumanAddr, InitResponse, Querier,
+    to_binary, Api, Binary, Env, Extern, HandleResponse, HumanAddr, InitResponse, Querier,
     ReadonlyStorage, StdError, StdResult, Storage, Uint128,
 };
 
 use crate::asset::{Asset, AssetInfo};
 use crate::msg::{HandleMsg, InitMsg, QueryAnswer, QueryMsg, ResponseStatus};
-use crate::querier::query_pair;
-use crate::state::{Pair, KEY_ADMIN, KEY_CSHBK, KEY_SSCRT, PREFIX_PAIRED_TOKENS};
+use crate::state::{
+    remove_pairs_from_storage, set_pairs_to_storage, KEY_ADMIN, KEY_CSHBK, KEY_SSCRT,
+    PREFIX_PAIRED_TOKENS,
+};
 use cosmwasm_storage::{PrefixedStorage, ReadonlyPrefixedStorage};
 use scrt_finance::types::SecretContract;
 use secret_toolkit::snip20;
@@ -25,10 +27,10 @@ pub fn init<S: Storage, A: Api, Q: Querier>(
         .store(KEY_ADMIN, &env.message.sender)?;
 
     if let Some(pairs) = msg.pairs {
-        let pair_hash = msg.pair_contract_hash.ok_or(|| {
-            StdError::generic_err(
+        let pair_hash = msg.pair_contract_hash.ok_or_else(|| {
+            return StdError::generic_err(
                 "when providing pairs, you have to provide pair contract hash as well",
-            )
+            );
         })?;
 
         set_pairs_to_storage(deps, pairs, pair_hash)?;
@@ -49,7 +51,10 @@ pub fn handle<S: Storage, A: Api, Q: Querier>(
             asset_out,
             account,
         } => receive_swap_data(deps, env, asset_in, asset_out, account),
-        HandleMsg::AddPairs { pairs } => add_pairs(deps, env, pairs),
+        HandleMsg::AddPairs {
+            pairs,
+            pair_contract_hash,
+        } => add_pairs(deps, env, pairs, pair_contract_hash),
         HandleMsg::RemovePairs { pairs } => remove_pairs(deps, env, pairs),
         HandleMsg::SetAdmin { address } => set_admin(deps, env, address),
     }
@@ -62,19 +67,7 @@ fn receive_swap_data<S: Storage, A: Api, Q: Querier>(
     asset_out: Asset,
     account: HumanAddr,
 ) -> StdResult<HandleResponse> {
-    // Check eligibility
-    let is_stored = PrefixedStorage::new(PREFIX_PAIRED_TOKENS, &mut deps.storage)
-        .get(env.message.sender.0.as_bytes());
-    if is_stored.is_none() {
-        // If stored => eligible
-        return Ok(HandleResponse {
-            messages: vec![],
-            log: vec![log("cashback_minting", "not_eligible")],
-            data: None,
-        });
-    }
-
-    let amount = get_eligibility(deps, asset_in, asset_out)?;
+    let amount = get_eligibility(deps, env, asset_in, asset_out)?;
 
     let mut messages = vec![];
     if amount > 0 {
@@ -100,10 +93,11 @@ fn receive_swap_data<S: Storage, A: Api, Q: Querier>(
 fn add_pairs<S: Storage, A: Api, Q: Querier>(
     deps: &mut Extern<S, A, Q>,
     env: Env,
-    pairs: Vec<Pair>,
+    pairs: Vec<HumanAddr>,
+    pair_contract_hash: String,
 ) -> StdResult<HandleResponse> {
     enforce_admin(deps, env)?;
-    set_pairs_to_storage(deps, pairs)?;
+    set_pairs_to_storage(deps, pairs, pair_contract_hash)?;
 
     Ok(HandleResponse {
         messages: vec![],
@@ -115,7 +109,7 @@ fn add_pairs<S: Storage, A: Api, Q: Querier>(
 fn remove_pairs<S: Storage, A: Api, Q: Querier>(
     deps: &mut Extern<S, A, Q>,
     env: Env,
-    pairs: Vec<Pair>,
+    pairs: Vec<HumanAddr>,
 ) -> StdResult<HandleResponse> {
     enforce_admin(deps, env)?;
     remove_pairs_from_storage(deps, pairs)?;
@@ -147,132 +141,38 @@ fn set_admin<S: Storage, A: Api, Q: Querier>(
 
 fn get_eligibility<S: Storage, A: Api, Q: Querier>(
     deps: &mut Extern<S, A, Q>,
+    env: Env,
     asset_in: Asset,
     asset_out: Asset,
 ) -> StdResult<u128> {
-    let scrt: Asset;
-    let paired: Asset;
-
-    if is_scrt(deps, asset_in.info.clone())? {
-        scrt = asset_in;
-        paired = asset_out;
-    } else if is_scrt(deps, asset_out.info.clone())? {
-        scrt = asset_out;
-        paired = asset_in;
-    } else {
-        return Ok(0);
-    }
-
-    let paired_addr: HumanAddr = match paired.info {
-        AssetInfo::Token { contract_addr, .. } => contract_addr,
-        AssetInfo::NativeToken { .. } => return Ok(scrt.amount.0), // If paired is native => this is the SCRT<>sSCRT pair
-    };
-    let is_stored =
-        PrefixedStorage::new(PREFIX_PAIRED_TOKENS, &mut deps.storage).get(paired_addr.0.as_bytes());
+    let is_stored = PrefixedStorage::new(PREFIX_PAIRED_TOKENS, &mut deps.storage)
+        .get(env.message.sender.0.as_bytes());
     if is_stored.is_none() {
         // If stored => eligible
         return Ok(0);
     }
 
-    Ok(scrt.amount.0) // Eligibility amount is arbitrarily set to the SCRT value of the swap
+    // Eligibility amount is arbitrarily set to the SCRT value of the swap
+    if is_scrt(deps, asset_in.info.clone())? {
+        Ok(asset_in.amount.0)
+    } else if is_scrt(deps, asset_out.info.clone())? {
+        Ok(asset_out.amount.0)
+    } else {
+        Ok(0)
+    }
 }
 
-fn is_scrt<S: Storage, A: Api, Q: Querier>(
+pub fn is_scrt<S: Storage, A: Api, Q: Querier>(
     deps: &Extern<S, A, Q>,
     asset: AssetInfo,
 ) -> StdResult<bool> {
-    match asset.info {
+    match asset {
         AssetInfo::Token { contract_addr, .. } => {
             let sscrt = TypedStore::<HumanAddr, S>::attach(&deps.storage).load(KEY_SSCRT)?;
             Ok(contract_addr == sscrt)
         }
         AssetInfo::NativeToken { denom } => Ok(denom.to_lowercase() == "uscrt".to_string()),
     }
-}
-
-fn set_pairs_to_storage<S: Storage, A: Api, Q: Querier>(
-    deps: &mut Extern<S, A, Q>,
-    pairs: Vec<HumanAddr>,
-    // pairs: Vec<Pair>,
-    pair_hash: String,
-) -> StdResult<()> {
-    let sscrt_addr = TypedStore::<HumanAddr, S>::attach(&deps.storage).load(KEY_SSCRT)?;
-
-    let mut supported_tokens = PrefixedStorage::new(PREFIX_PAIRED_TOKENS, &mut deps.storage);
-    for pair in pairs {
-        let pair_info = query_pair(&deps.querier, pair, pair_hash.clone())?;
-
-        match pair_info.asset_infos[0] {
-            AssetInfo::Token { .. } => {}
-            AssetInfo::NativeToken { .. } => {}
-        }
-
-        let token;
-        if is_scrt(&deps, pair_info.asset_infos[0].clone())? {
-            token = match pair_info.asset_infos[1] {
-                AssetInfo::Token { contract_addr, .. } => contract_addr,
-                AssetInfo::NativeToken { .. } => match pair_info.asset_infos[0] {
-                    AssetInfo::Token { contract_addr, .. } => contract_addr,
-                    AssetInfo::NativeToken { .. } => {
-                        return Err(StdError::generic_err(
-                            "two native tokens? something went wrong",
-                        ))
-                    }
-                },
-            }
-        } else if is_scrt(&deps, pair_info.asset_infos[1].clone())? {
-            token = match pair_info.asset_infos[0] {
-                AssetInfo::Token { contract_addr, .. } => contract_addr,
-                AssetInfo::NativeToken { .. } =>{
-                        return Err(StdError::generic_err(
-                            "two native tokens? something went wrong",
-                        ));
-                    },
-                };
-            }
-        }
-
-        // Get the token that is not sSCRT
-        let token;
-        if pair.asset_0 == sscrt_addr {
-            token = pair.asset_1;
-        } else if pair.asset_1 == sscrt_addr {
-            token = pair.asset_0;
-        } else {
-            return Err(StdError::generic_err(
-                "invalid pair! One of the sides has to be sSCRT",
-            ));
-        }
-        // Value is irrelevant, just marking that token as supported
-        supported_tokens.set(token.0.as_bytes(), &[1]);
-    }
-
-    Ok(())
-}
-
-fn remove_pairs_from_storage<S: Storage, A: Api, Q: Querier>(
-    deps: &mut Extern<S, A, Q>,
-    pairs: Vec<Pair>,
-) -> StdResult<()> {
-    let sscrt_addr = TypedStoreMut::<HumanAddr, S>::attach(&mut deps.storage).load(KEY_SSCRT)?;
-
-    let mut supported_tokens = PrefixedStorage::new(PREFIX_PAIRED_TOKENS, &mut deps.storage);
-    for pair in pairs {
-        // Get the token that is not sSCRT
-        let token;
-        if pair.asset_0 == sscrt_addr {
-            token = pair.asset_1;
-        } else if pair.asset_1 == sscrt_addr {
-            token = pair.asset_0;
-        } else {
-            return Err(StdError::generic_err(
-                "invalid pair! One of the sides has to be sSCRT",
-            ));
-        }
-        supported_tokens.remove(token.0.as_bytes());
-    }
-
-    Ok(())
 }
 
 fn enforce_admin<S: Storage, A: Api, Q: Querier>(
@@ -295,34 +195,19 @@ pub fn query<S: Storage, A: Api, Q: Querier>(
     msg: QueryMsg,
 ) -> StdResult<Binary> {
     match msg {
-        QueryMsg::IsSupported { pair } => query_is_supported(deps, pair),
+        QueryMsg::IsSupported { pair } => query_is_eligible(deps, pair),
         QueryMsg::Cashback {} => query_cashback(deps),
         QueryMsg::Admin {} => query_admin(deps),
     }
 }
 
-fn query_is_supported<S: Storage, A: Api, Q: Querier>(
+fn query_is_eligible<S: Storage, A: Api, Q: Querier>(
     deps: &Extern<S, A, Q>,
-    pair: Pair,
+    pair: HumanAddr,
 ) -> StdResult<Binary> {
-    let sscrt_addr = TypedStore::<HumanAddr, S>::attach(&deps.storage).load(KEY_SSCRT)?;
-
     let supported_tokens = ReadonlyPrefixedStorage::new(PREFIX_PAIRED_TOKENS, &deps.storage);
+    let is_supported = supported_tokens.get(pair.0.as_bytes());
 
-    // Get the token that is not sSCRT
-    let token;
-    if pair.asset_0 == sscrt_addr {
-        token = pair.asset_1;
-    } else if pair.asset_1 == sscrt_addr {
-        token = pair.asset_0;
-    } else {
-        // If no sSCRT => not supported
-        return to_binary(&QueryAnswer::IsSupported {
-            is_supported: false,
-        });
-    }
-
-    let is_supported = supported_tokens.get(token.0.as_bytes());
     to_binary(&QueryAnswer::IsSupported {
         is_supported: is_supported.is_some(),
     })

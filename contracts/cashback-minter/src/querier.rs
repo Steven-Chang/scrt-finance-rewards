@@ -1,5 +1,7 @@
 use crate::asset::AssetInfo;
 use cosmwasm_std::{to_binary, HumanAddr, Querier, QueryRequest, StdResult, Uint128, WasmQuery};
+use schemars::JsonSchema;
+use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
@@ -17,6 +19,12 @@ pub struct PairInfo {
     pub asset0_volume: Uint128,
     pub asset1_volume: Uint128,
     pub factory: Factory,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+pub struct Factory {
+    pub address: HumanAddr,
+    pub code_hash: String,
 }
 
 pub fn query_pair<Q: Querier>(
