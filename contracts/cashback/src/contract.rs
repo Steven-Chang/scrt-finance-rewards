@@ -1003,6 +1003,10 @@ fn transfer_reward<S: Storage, A: Api, Q: Querier>(
     let reward = burn_amount * reward_balance / total_supply;
 
     if reward > 0 {
+        let new_balance = reward_balance - reward;
+        TypedStoreMut::<u128, S>::attach(&mut deps.storage)
+            .store(REWARD_BALANCE_KEY, &new_balance)?;
+
         Ok(vec![secret_toolkit::snip20::transfer_msg(
             burner,
             Uint128(reward),
