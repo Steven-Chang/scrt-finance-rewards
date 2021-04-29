@@ -9,7 +9,7 @@ function wait_for_tx() {
 }
 
 export wasm_path=build
-export revision="5"
+export revision="10"
 
 export deployer_name=holotest
 export deployer_address=$(secretcli keys show -a $deployer_name)
@@ -22,7 +22,9 @@ export gov_addr="secret12q2c5s5we5zn9pq43l0rlsygtql6646my0sqfm"
 export token_code_hash="c7fe67b243dfedc625a28ada303434d6f5a46a3086e7d2b5063a814e9f9a379d"
 export master_addr="secret13hqxweum28nj0c53nnvrpd23ygguhteqggf852"
 export master_code_hash="c8555c2de49967ca484ba21cf563c2b27227a39ad6f32ff3de9758f20159d2d2"
-#export router_addr="secret1x7266y5mjsh3kw9pd2l4q37xzre7ypp2u2fvve"
+export pair_hash="f86b5c3ca0381ce7edfffa534789501ae17cf6b21515213693baf980765729c2"
+export pair1="secret16krcdrqh6y6pazvkj58nrvkerk0q0ttg22kepl" # sSCRT/SCRT
+export pair2="secret1l56ke78aj9jxr4wu64h4rm20cnqxevzpf6tmfc" # sSCRT/SEFI
 
 echo "Storing CSHBK"
 resp=$(secretcli tx compute store "${wasm_path}/cashback_token.wasm" --from "$deployer_name" --gas 3000000 -b block -y)
@@ -59,7 +61,7 @@ echo "Stored cashback minter: '$minter_code_id'"
 
 echo "Deploying Cashback Minter.."
 export TX_HASH=$(
-  secretcli tx compute instantiate $minter_code_id '{"sscrt_addr":"'"$sscrt_addr"'", "pairs":[{"asset_0":"'"$sscrt_addr"'", "asset_1":"secret12q2c5s5we5zn9pq43l0rlsygtql6646my0sqfm"}, {"asset_0":"secret1ttg5cn3mv5n9qv8r53stt6cjx8qft8ut9d66ed", "asset_1":"'"$sscrt_addr"'"}], "cashback":{"address":"'"$cashback_addr"'","contract_hash":"'"$cashback_hash"'"}}' --from $deployer_name --gas 1500000 --label cb-minter-$revision -b block -y |
+  secretcli tx compute instantiate $minter_code_id '{"sscrt_addr":"'"$sscrt_addr"'", "pairs":["'"$pair1"'","'"$pair2"'"], "pair_contract_hash":"'"$pair_hash"'", "cashback":{"address":"'"$cashback_addr"'","contract_hash":"'"$cashback_hash"'"}}' --from $deployer_name --gas 1500000 --label cb-minter-$revision -b block -y |
   jq -r .txhash
 )
 wait_for_tx "$TX_HASH" "Waiting for tx to finish on-chain..."
