@@ -181,11 +181,11 @@ fn enforce_admin<S: Storage, A: Api, Q: Querier>(
 ) -> StdResult<()> {
     let admin: HumanAddr = TypedStore::attach(&deps.storage).load(KEY_ADMIN)?;
 
-    if admin == env.message.sender {
-        return Ok(());
+    if admin != env.message.sender {
+        return Err(StdError::generic_err("not an admin!"));
     }
 
-    Err(StdError::generic_err("not an admin!"))
+    Ok(())
 }
 
 // Query functions

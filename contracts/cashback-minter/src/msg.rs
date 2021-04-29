@@ -7,7 +7,6 @@ use serde::{Deserialize, Serialize};
 #[derive(Serialize, Deserialize, JsonSchema)]
 pub struct InitMsg {
     pub sscrt_addr: HumanAddr,
-    // pub pairs: Option<Vec<Pair>>,
     pub pairs: Option<Vec<HumanAddr>>,
     pub pair_contract_hash: Option<String>,
     pub cashback: SecretContract,
