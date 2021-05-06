@@ -222,7 +222,6 @@ pub enum HandleAnswer {
 #[serde(rename_all = "snake_case")]
 pub enum QueryMsg {
     TokenInfo {},
-    ExchangeRate {},
     Allowance {
         owner: HumanAddr,
         spender: HumanAddr,
@@ -239,6 +238,7 @@ pub enum QueryMsg {
         page_size: u32,
     },
     Minters {},
+    RewardBalance {},
 }
 
 impl QueryMsg {
@@ -266,10 +266,6 @@ pub enum QueryAnswer {
         decimals: u8,
         total_supply: Option<Uint128>,
     },
-    ExchangeRate {
-        rate: Uint128,
-        denom: String,
-    },
     Allowance {
         spender: HumanAddr,
         owner: HumanAddr,
@@ -288,6 +284,9 @@ pub enum QueryAnswer {
     },
     Minters {
         minters: Vec<HumanAddr>,
+    },
+    RewardBalance {
+        balance: Uint128,
     },
 }
 

@@ -169,8 +169,8 @@ pub fn handle<S: Storage, A: Api, Q: Querier>(
 pub fn query<S: Storage, A: Api, Q: Querier>(deps: &Extern<S, A, Q>, msg: QueryMsg) -> QueryResult {
     match msg {
         QueryMsg::TokenInfo {} => query_token_info(&deps.storage),
-        QueryMsg::ExchangeRate {} => query_exchange_rate(),
-        QueryMsg::Minters { .. } => query_minters(deps),
+        QueryMsg::Minters {} => query_minters(deps),
+        QueryMsg::RewardBalance {} => query_reward_balance(deps),
         _ => authenticated_queries(deps, msg),
     }
 }
@@ -211,15 +211,6 @@ pub fn authenticated_queries<S: Storage, A: Api, Q: Querier>(
     Ok(to_binary(&QueryAnswer::ViewingKeyError {
         msg: "Wrong viewing key for this address or viewing key not set".to_string(),
     })?)
-}
-
-/// This function just returns a constant 1:1 rate to uscrt, since that's the purpose of this
-/// contract.
-fn query_exchange_rate() -> QueryResult {
-    to_binary(&QueryAnswer::ExchangeRate {
-        rate: Uint128(1),
-        denom: "uscrt".to_string(),
-    })
 }
 
 fn query_token_info<S: ReadonlyStorage>(storage: &S) -> QueryResult {
@@ -269,6 +260,18 @@ fn query_minters<S: Storage, A: Api, Q: Querier>(deps: &Extern<S, A, Q>) -> StdR
 
     let response = QueryAnswer::Minters { minters };
     to_binary(&response)
+}
+
+fn query_reward_balance<S: Storage, A: Api, Q: Querier>(
+    deps: &Extern<S, A, Q>,
+) -> StdResult<Binary> {
+    let reward_balance = TypedStore::<u128, S>::attach(&deps.storage)
+        .load(REWARD_BALANCE_KEY)
+        .unwrap_or(0);
+
+    to_binary(&QueryAnswer::RewardBalance {
+        balance: Uint128(reward_balance),
+    })
 }
 
 fn change_admin<S: Storage, A: Api, Q: Querier>(

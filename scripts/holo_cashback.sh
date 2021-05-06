@@ -9,7 +9,7 @@ function wait_for_tx() {
 }
 
 export wasm_path=build
-export revision="10"
+export revision="11"
 
 export deployer_name=holotest
 export deployer_address=$(secretcli keys show -a $deployer_name)
