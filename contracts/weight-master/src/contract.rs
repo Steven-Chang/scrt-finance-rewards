@@ -175,7 +175,7 @@ fn update_allocation<S: Storage, A: Api, Q: Querier>(
     let mut rewards = 0;
     let mut messages = vec![];
     if spy_settings.last_update_block < env.block.height && spy_settings.weight > 0 {
-        // Calc amount to minLPStakingHandleMsgt for this spy contract and push to messages
+        // Calc amount to minLPStakingHandleMsg for this spy contract and push to messages
         rewards = get_spy_rewards(
             env.block.height,
             state.total_weight,
