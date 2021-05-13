@@ -1,17 +1,13 @@
+use crate::state::{PollConfig, PollMetadata};
 use cosmwasm_std::{HumanAddr, Uint128};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, JsonSchema)]
 pub struct InitMsg {
-    title: String,
-    description: String,
-    additional: Option<String>,
-    duration: Option<u64>,     // TODO: Might want to change this later
-    quorum: Option<u8>,        // X/100% (percentage)
-    min_threshold: Option<u8>, // X/100% (percentage)
-    choices: Vec<String>,
-    author: HumanAddr,
+    pub metadata: PollMetadata,
+    pub config: PollConfig,
+    pub choices: Vec<String>,
 }
 
 #[derive(Serialize, Deserialize, JsonSchema)]
