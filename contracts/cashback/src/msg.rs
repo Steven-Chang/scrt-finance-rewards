@@ -129,6 +129,14 @@ pub enum HandleMsg {
         level: ContractStatusLevel,
         padding: Option<String>,
     },
+    SetSefi {
+        address: HumanAddr,
+        hash: String,
+    },
+    SetMaster {
+        address: HumanAddr,
+        hash: String,
+    },
 
     // Master callbacks
     NotifyAllocation {
@@ -146,14 +154,6 @@ pub enum HookMsg {
 #[derive(Serialize, Deserialize, JsonSchema, Debug)]
 #[serde(rename_all = "snake_case")]
 pub enum HandleAnswer {
-    // Native
-    Deposit {
-        status: ResponseStatus,
-    },
-    Redeem {
-        status: ResponseStatus,
-    },
-
     // Base
     Transfer {
         status: ResponseStatus,
@@ -214,6 +214,12 @@ pub enum HandleAnswer {
         status: ResponseStatus,
     },
     SetContractStatus {
+        status: ResponseStatus,
+    },
+    SetSefi {
+        status: ResponseStatus,
+    },
+    SetMaster {
         status: ResponseStatus,
     },
 }
