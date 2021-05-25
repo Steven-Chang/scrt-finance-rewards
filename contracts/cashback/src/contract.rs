@@ -13,11 +13,11 @@ use crate::msg::{
 use crate::rand::sha_256;
 use crate::receiver::Snip20ReceiveMsg;
 use crate::state::{
-    get_receiver_hash, get_transfers, read_allowance, read_viewing_key, set_receiver_hash,
-    store_transfer, write_allowance, write_viewing_key, Balances, Config, Constants,
-    ReadonlyBalances, ReadonlyConfig, SecretContract, KEY_MASTER_CONTRACT, REWARD_BALANCE_KEY,
-    SEFI_KEY,
+    get_receiver_hash, read_allowance, read_viewing_key, set_receiver_hash, write_allowance,
+    write_viewing_key, Balances, Config, Constants, ReadonlyBalances, ReadonlyConfig,
+    SecretContract, KEY_MASTER_CONTRACT, REWARD_BALANCE_KEY, SEFI_KEY,
 };
+use crate::transaction_history::{get_transfers, get_txs, store_burn, store_mint, store_transfer};
 use crate::viewing_key::{ViewingKey, VIEWING_KEY_SIZE};
 use scrt_finance::master_msg::MasterHandleMsg;
 use secret_toolkit::storage::{TypedStore, TypedStoreMut};
@@ -30,13 +30,16 @@ pub fn init<S: Storage, A: Api, Q: Querier>(
     env: Env,
     msg: InitMsg,
 ) -> StdResult<InitResponse> {
+    let admin = env.message.sender;
+    let canon_admin = deps.api.canonical_address(&admin)?;
+
     let mut total_supply: u128 = 0;
     {
-        let mut balances = Balances::from_storage(&mut deps.storage);
         let initial_balances = msg.initial_balances.unwrap_or_default();
         for balance in initial_balances {
             let balance_address = deps.api.canonical_address(&balance.address)?;
             let amount = balance.amount.u128();
+            let mut balances = Balances::from_storage(&mut deps.storage);
             balances.set_account_balance(&balance_address, amount);
             if let Some(new_total_supply) = total_supply.checked_add(amount) {
                 total_supply = new_total_supply;
@@ -45,10 +48,17 @@ pub fn init<S: Storage, A: Api, Q: Querier>(
                     "The sum of all initial balances exceeds the maximum possible total supply",
                 ));
             }
+            store_mint(
+                &mut deps.storage,
+                &canon_admin,
+                &balance_address,
+                balance.amount,
+                "CSHBK".to_string(),
+                Some("Initial Balance".to_string()),
+                &env.block,
+            )?;
         }
     }
-
-    let admin = env.message.sender;
 
     let prng_seed_hashed = sha_256(&msg.prng_seed.0);
 
@@ -105,15 +115,19 @@ pub fn handle<S: Storage, A: Api, Q: Querier>(
     let response = match msg {
         // SNIP-20
         HandleMsg::Transfer {
-            recipient, amount, ..
-        } => try_transfer(deps, env, &recipient, amount),
+            recipient,
+            amount,
+            memo,
+            ..
+        } => try_transfer(deps, env, &recipient, amount, memo),
         HandleMsg::Send {
             recipient,
             amount,
             msg,
+            memo,
             ..
-        } => try_send(deps, env, &recipient, amount, msg),
-        HandleMsg::Burn { amount, .. } => try_burn(deps, env, amount),
+        } => try_send(deps, env, &recipient, amount, memo, msg),
+        HandleMsg::Burn { amount, memo, .. } => try_burn(deps, env, amount, memo),
         HandleMsg::RegisterReceive { code_hash, .. } => try_register_receive(deps, env, code_hash),
         HandleMsg::CreateViewingKey { entropy, .. } => try_create_key(deps, env, entropy),
         HandleMsg::SetViewingKey { key, .. } => try_set_key(deps, env, key),
@@ -133,19 +147,29 @@ pub fn handle<S: Storage, A: Api, Q: Querier>(
             owner,
             recipient,
             amount,
+            memo,
             ..
-        } => try_transfer_from(deps, env, &owner, &recipient, amount),
+        } => try_transfer_from(deps, env, &owner, &recipient, amount, memo),
         HandleMsg::SendFrom {
             owner,
             recipient,
             amount,
             msg,
+            memo,
             ..
-        } => try_send_from(deps, env, &owner, &recipient, amount, msg),
-        HandleMsg::BurnFrom { owner, amount, .. } => try_burn_from(deps, env, &owner, amount),
+        } => try_send_from(deps, env, &owner, &recipient, amount, memo, msg),
+        HandleMsg::BurnFrom {
+            owner,
+            amount,
+            memo,
+            ..
+        } => try_burn_from(deps, env, &owner, amount, memo),
         HandleMsg::Mint {
-            recipient, amount, ..
-        } => try_mint(deps, env, recipient, amount),
+            recipient,
+            amount,
+            memo,
+            ..
+        } => try_mint(deps, env, recipient, amount, memo),
         HandleMsg::AddMinters { minters, .. } => add_minters(deps, env, minters),
         HandleMsg::RemoveMinters { minters, .. } => remove_minters(deps, env, minters),
         HandleMsg::SetMinters { minters, .. } => set_minters(deps, env, minters),
@@ -201,6 +225,12 @@ pub fn authenticated_queries<S: Storage, A: Api, Q: Querier>(
                     page,
                     page_size,
                     ..
+                } => query_transfers(&deps, &address, page.unwrap_or(0), page_size),
+                QueryMsg::TransactionHistory {
+                    address,
+                    page,
+                    page_size,
+                    ..
                 } => query_transactions(&deps, &address, page.unwrap_or(0), page_size),
                 QueryMsg::Allowance { owner, spender, .. } => {
                     try_check_allowance(deps, owner, spender)
@@ -233,16 +263,35 @@ fn query_token_info<S: ReadonlyStorage>(storage: &S) -> QueryResult {
     })
 }
 
+pub fn query_transfers<S: Storage, A: Api, Q: Querier>(
+    deps: &Extern<S, A, Q>,
+    account: &HumanAddr,
+    page: u32,
+    page_size: u32,
+) -> StdResult<Binary> {
+    let address = deps.api.canonical_address(account)?;
+    let (txs, total) = get_transfers(&deps.api, &deps.storage, &address, page, page_size)?;
+
+    let result = QueryAnswer::TransferHistory {
+        txs,
+        total: Some(total),
+    };
+    to_binary(&result)
+}
+
 pub fn query_transactions<S: Storage, A: Api, Q: Querier>(
     deps: &Extern<S, A, Q>,
     account: &HumanAddr,
     page: u32,
     page_size: u32,
 ) -> StdResult<Binary> {
-    let address = deps.api.canonical_address(account).unwrap();
-    let txs = get_transfers(&deps.api, &deps.storage, &address, page, page_size)?;
+    let address = deps.api.canonical_address(account)?;
+    let (txs, total) = get_txs(&deps.api, &deps.storage, &address, page, page_size)?;
 
-    let result = QueryAnswer::TransferHistory { txs };
+    let result = QueryAnswer::TransactionHistory {
+        txs,
+        total: Some(total),
+    };
     to_binary(&result)
 }
 
@@ -301,9 +350,10 @@ fn try_mint<S: Storage, A: Api, Q: Querier>(
     env: Env,
     address: HumanAddr,
     amount: Uint128,
+    memo: Option<String>,
 ) -> StdResult<HandleResponse> {
     let mut config = Config::from_storage(&mut deps.storage);
-
+    let constants = config.constants()?;
     let minters = config.minters();
     if !minters.contains(&env.message.sender) {
         return Err(StdError::generic_err(
@@ -311,10 +361,10 @@ fn try_mint<S: Storage, A: Api, Q: Querier>(
         ));
     }
 
-    let amount = amount.u128();
+    let raw_amount = amount.u128();
 
     let mut total_supply = config.total_supply();
-    if let Some(new_total_supply) = total_supply.checked_add(amount) {
+    if let Some(new_total_supply) = total_supply.checked_add(raw_amount) {
         total_supply = new_total_supply;
     } else {
         return Err(StdError::generic_err(
@@ -323,13 +373,13 @@ fn try_mint<S: Storage, A: Api, Q: Querier>(
     }
     config.set_total_supply(total_supply);
 
-    let receipient_account = &deps.api.canonical_address(&address)?;
+    let recipient_account = &deps.api.canonical_address(&address)?;
 
     let mut balances = Balances::from_storage(&mut deps.storage);
 
-    let mut account_balance = balances.balance(receipient_account);
+    let mut account_balance = balances.balance(recipient_account);
 
-    if let Some(new_balance) = account_balance.checked_add(amount) {
+    if let Some(new_balance) = account_balance.checked_add(raw_amount) {
         account_balance = new_balance;
     } else {
         // This error literally can not happen, since the account's funds are a subset
@@ -341,14 +391,25 @@ fn try_mint<S: Storage, A: Api, Q: Querier>(
         ));
     }
 
-    balances.set_account_balance(receipient_account, account_balance);
+    balances.set_account_balance(recipient_account, account_balance);
+
+    let minter = &deps.api.canonical_address(&env.message.sender)?;
+
+    store_mint(
+        &mut deps.storage,
+        minter,
+        recipient_account,
+        amount,
+        constants.symbol,
+        memo,
+        &env.block,
+    )?;
 
     let res = HandleResponse {
         messages: vec![],
         log: vec![],
         data: Some(to_binary(&HandleAnswer::Mint { status: Success })?),
     };
-
     Ok(res)
 }
 
@@ -433,6 +494,7 @@ fn try_transfer_impl<S: Storage, A: Api, Q: Querier>(
     env: Env,
     recipient: &HumanAddr,
     amount: Uint128,
+    memo: Option<String>,
 ) -> StdResult<()> {
     let sender_address = deps.api.canonical_address(&env.message.sender)?;
     let recipient_address = deps.api.canonical_address(recipient)?;
@@ -453,6 +515,8 @@ fn try_transfer_impl<S: Storage, A: Api, Q: Querier>(
         &recipient_address,
         amount,
         symbol,
+        memo,
+        &env.block,
     )?;
 
     Ok(())
@@ -463,8 +527,9 @@ fn try_transfer<S: Storage, A: Api, Q: Querier>(
     env: Env,
     recipient: &HumanAddr,
     amount: Uint128,
+    memo: Option<String>,
 ) -> StdResult<HandleResponse> {
-    try_transfer_impl(deps, env, recipient, amount)?;
+    try_transfer_impl(deps, env, recipient, amount, memo)?;
 
     let res = HandleResponse {
         messages: vec![],
@@ -482,11 +547,12 @@ fn try_add_receiver_api_callback<S: ReadonlyStorage>(
     sender: HumanAddr,
     from: HumanAddr,
     amount: Uint128,
+    memo: Option<String>,
 ) -> StdResult<()> {
     let receiver_hash = get_receiver_hash(storage, recipient);
     if let Some(receiver_hash) = receiver_hash {
         let receiver_hash = receiver_hash?;
-        let receiver_msg = Snip20ReceiveMsg::new(sender, from, amount, msg);
+        let receiver_msg = Snip20ReceiveMsg::new(sender, from, amount, memo, msg);
         let callback_msg = receiver_msg.into_cosmos_msg(receiver_hash, recipient.clone())?;
 
         messages.push(callback_msg);
@@ -499,10 +565,11 @@ fn try_send<S: Storage, A: Api, Q: Querier>(
     env: Env,
     recipient: &HumanAddr,
     amount: Uint128,
+    memo: Option<String>,
     msg: Option<Binary>,
 ) -> StdResult<HandleResponse> {
     let sender = env.message.sender.clone();
-    try_transfer_impl(deps, env, recipient, amount)?;
+    try_transfer_impl(deps, env, recipient, amount, memo.clone())?;
 
     let mut messages = vec![];
 
@@ -514,6 +581,7 @@ fn try_send<S: Storage, A: Api, Q: Querier>(
         sender.clone(),
         sender,
         amount,
+        memo,
     )?;
 
     let res = HandleResponse {
@@ -553,6 +621,7 @@ fn try_transfer_from_impl<S: Storage, A: Api, Q: Querier>(
     owner: &HumanAddr,
     recipient: &HumanAddr,
     amount: Uint128,
+    memo: Option<String>,
 ) -> StdResult<()> {
     let spender_address = deps.api.canonical_address(&env.message.sender)?;
     let owner_address = deps.api.canonical_address(owner)?;
@@ -600,6 +669,8 @@ fn try_transfer_from_impl<S: Storage, A: Api, Q: Querier>(
         &recipient_address,
         amount,
         symbol,
+        memo,
+        &env.block,
     )?;
 
     Ok(())
@@ -611,8 +682,9 @@ fn try_transfer_from<S: Storage, A: Api, Q: Querier>(
     owner: &HumanAddr,
     recipient: &HumanAddr,
     amount: Uint128,
+    memo: Option<String>,
 ) -> StdResult<HandleResponse> {
-    try_transfer_from_impl(deps, env, owner, recipient, amount)?;
+    try_transfer_from_impl(deps, env, owner, recipient, amount, memo)?;
 
     let res = HandleResponse {
         messages: vec![],
@@ -628,10 +700,11 @@ fn try_send_from<S: Storage, A: Api, Q: Querier>(
     owner: &HumanAddr,
     recipient: &HumanAddr,
     amount: Uint128,
+    memo: Option<String>,
     msg: Option<Binary>,
 ) -> StdResult<HandleResponse> {
     let sender = env.message.sender.clone();
-    try_transfer_from_impl(deps, env, owner, recipient, amount)?;
+    try_transfer_from_impl(deps, env, owner, recipient, amount, memo.clone())?;
 
     let mut messages = vec![];
 
@@ -643,6 +716,7 @@ fn try_send_from<S: Storage, A: Api, Q: Querier>(
         sender,
         owner.clone(),
         amount,
+        memo,
     )?;
 
     let res = HandleResponse {
@@ -658,10 +732,11 @@ fn try_burn_from<S: Storage, A: Api, Q: Querier>(
     env: Env,
     owner: &HumanAddr,
     amount: Uint128,
+    memo: Option<String>,
 ) -> StdResult<HandleResponse> {
     let spender_address = deps.api.canonical_address(&env.message.sender)?;
     let owner_address = deps.api.canonical_address(owner)?;
-    let amount = amount.u128();
+    let raw_amount = amount.u128();
 
     let mut allowance = read_allowance(&deps.storage, &owner_address, &spender_address)?;
 
@@ -673,13 +748,13 @@ fn try_burn_from<S: Storage, A: Api, Q: Querier>(
             &spender_address,
             allowance,
         )?;
-        return Err(insufficient_allowance(0, amount));
+        return Err(insufficient_allowance(0, raw_amount));
     }
 
-    if let Some(new_allowance) = allowance.amount.checked_sub(amount) {
+    if let Some(new_allowance) = allowance.amount.checked_sub(raw_amount) {
         allowance.amount = new_allowance;
     } else {
-        return Err(insufficient_allowance(allowance.amount, amount));
+        return Err(insufficient_allowance(allowance.amount, raw_amount));
     }
 
     write_allowance(
@@ -696,7 +771,8 @@ fn try_burn_from<S: Storage, A: Api, Q: Querier>(
         master,
         Some(to_binary(&HookMsg::Burn {
             owner: owner.clone(),
-            amount: Uint128(amount),
+            amount,
+            memo,
         })?),
     )
 }
@@ -871,6 +947,7 @@ fn try_burn<S: Storage, A: Api, Q: Querier>(
     deps: &mut Extern<S, A, Q>,
     env: Env,
     amount: Uint128,
+    memo: Option<String>,
 ) -> StdResult<HandleResponse> {
     let master =
         TypedStore::<SecretContract, S>::attach(&deps.storage).load(KEY_MASTER_CONTRACT)?;
@@ -881,28 +958,33 @@ fn try_burn<S: Storage, A: Api, Q: Querier>(
         Some(to_binary(&HookMsg::Burn {
             owner: sender,
             amount,
+            memo,
         })?),
     )
 }
 
 fn burn_hook<S: Storage, A: Api, Q: Querier>(
     deps: &mut Extern<S, A, Q>,
-    _env: Env,
+    env: Env,
     burner: HumanAddr,
     amount: Uint128,
+    memo: Option<String>,
 ) -> StdResult<HandleResponse> {
     let sender_address = deps.api.canonical_address(&burner)?;
-    let amount = amount.u128();
+    let raw_amount = amount.u128();
+
+    let config = Config::from_storage(&mut deps.storage);
+    let constants = config.constants()?;
 
     let mut balances = Balances::from_storage(&mut deps.storage);
     let mut account_balance = balances.balance(&sender_address);
 
-    if let Some(new_account_balance) = account_balance.checked_sub(amount) {
+    if let Some(new_account_balance) = account_balance.checked_sub(raw_amount) {
         account_balance = new_account_balance;
     } else {
         return Err(StdError::generic_err(format!(
             "insufficient funds to burn: balance={}, required={}",
-            account_balance, amount
+            account_balance, raw_amount
         )));
     }
 
@@ -911,9 +993,9 @@ fn burn_hook<S: Storage, A: Api, Q: Querier>(
     let mut total_supply = Config::from_storage(&mut deps.storage).total_supply();
 
     // Create a message to transfer eligible SEFI
-    let messages = transfer_reward(deps, burner, amount, total_supply)?;
+    let messages = transfer_reward(deps, burner, raw_amount, total_supply)?;
 
-    if let Some(new_total_supply) = total_supply.checked_sub(amount) {
+    if let Some(new_total_supply) = total_supply.checked_sub(raw_amount) {
         total_supply = new_total_supply;
     } else {
         return Err(StdError::generic_err(
@@ -921,6 +1003,16 @@ fn burn_hook<S: Storage, A: Api, Q: Querier>(
         ));
     }
     Config::from_storage(&mut deps.storage).set_total_supply(total_supply);
+
+    store_burn(
+        &mut deps.storage,
+        &sender_address,
+        &sender_address,
+        amount,
+        constants.symbol,
+        memo,
+        &env.block,
+    )?;
 
     let res = HandleResponse {
         messages,
@@ -954,7 +1046,11 @@ fn notify_allocation<S: Storage, A: Api, Q: Querier>(
 
     if let Some(hook_msg) = hook {
         response = match hook_msg {
-            HookMsg::Burn { owner, amount } => burn_hook(deps, env, owner, amount),
+            HookMsg::Burn {
+                owner,
+                amount,
+                memo,
+            } => burn_hook(deps, env, owner, amount, memo),
         };
     }
 
