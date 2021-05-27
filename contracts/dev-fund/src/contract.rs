@@ -27,12 +27,13 @@ pub fn init<S: Storage, A: Api, Q: Querier>(
             beneficiary: msg.beneficiary.unwrap_or(env.message.sender),
             sefi: msg.sefi.clone(),
             master: msg.master,
+            viewing_key: msg.viewing_key.clone(),
             own_addr: env.contract.address,
         },
     )?;
 
     let messages = vec![snip20::set_viewing_key_msg(
-        msg.viewing_key.clone(),
+        msg.viewing_key,
         None,
         RESPONSE_BLOCK_SIZE, // This is private data, need to pad
         msg.sefi.contract_hash,
@@ -60,6 +61,7 @@ pub fn handle<S: Storage, A: Api, Q: Querier>(
             amount.u128(),
             hook.map(|h| from_binary(&h).unwrap()),
         ),
+        HandleMsg::RefreshBalance {} => refresh_balance(deps, env),
     };
 
     pad_handle_result(response, RESPONSE_BLOCK_SIZE)
@@ -198,6 +200,34 @@ fn change_beneficiary<S: Storage, A: Api, Q: Querier>(
 
     config.beneficiary = address;
     config_store.store(CONFIG_KEY, &config)?;
+
+    Ok(HandleResponse {
+        messages: vec![],
+        log: vec![],
+        data: Some(to_binary(&HandleAnswer::ChangeBeneficiary {
+            status: Success,
+        })?),
+    })
+}
+
+// This exists for an unlikely weird case where the stored balance is not correct
+fn refresh_balance<S: Storage, A: Api, Q: Querier>(
+    deps: &mut Extern<S, A, Q>,
+    env: Env,
+) -> StdResult<HandleResponse> {
+    let config: Config = TypedStore::attach(&deps.storage).load(CONFIG_KEY)?;
+    enforce_admin(config.clone(), env.clone())?;
+
+    let balance = snip20::balance_query(
+        &deps.querier,
+        env.contract.address,
+        config.viewing_key,
+        1,
+        config.sefi.contract_hash,
+        config.sefi.address,
+    )?;
+    TypedStoreMut::attach(&mut deps.storage)
+        .store(ACCUMULATED_REWARDS_KEY, &balance.amount.u128())?;
 
     Ok(HandleResponse {
         messages: vec![],

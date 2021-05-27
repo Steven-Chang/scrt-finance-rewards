@@ -8,5 +8,6 @@ pub struct Config {
     pub beneficiary: HumanAddr,
     pub sefi: SecretContract,
     pub master: SecretContract,
+    pub viewing_key: String,
     pub own_addr: HumanAddr,
 }

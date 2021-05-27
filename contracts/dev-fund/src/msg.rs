@@ -27,6 +27,7 @@ pub enum HandleMsg {
     ChangeBeneficiary {
         address: HumanAddr,
     },
+    RefreshBalance {},
 
     // Master callbacks
     NotifyAllocation {
