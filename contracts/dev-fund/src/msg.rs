@@ -8,7 +8,6 @@ pub struct InitMsg {
     pub sefi: SecretContract,
     pub master: SecretContract,
     pub viewing_key: String,
-    pub prng_seed: Binary,
     pub beneficiary: Option<HumanAddr>,
 }
 
