@@ -232,7 +232,7 @@ fn refresh_balance<S: Storage, A: Api, Q: Querier>(
     Ok(HandleResponse {
         messages: vec![],
         log: vec![],
-        data: Some(to_binary(&HandleAnswer::ChangeBeneficiary {
+        data: Some(to_binary(&HandleAnswer::RefreshBalance {
             status: Success,
         })?),
     })

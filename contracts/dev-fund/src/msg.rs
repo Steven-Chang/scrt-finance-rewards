@@ -41,6 +41,7 @@ pub enum HandleAnswer {
     Redeem { status: ResponseStatus },
     ChangeAdmin { status: ResponseStatus },
     ChangeBeneficiary { status: ResponseStatus },
+    RefreshBalance { status: ResponseStatus },
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
