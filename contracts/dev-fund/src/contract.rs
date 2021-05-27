@@ -245,7 +245,9 @@ fn query_balance<S: Storage, A: Api, Q: Querier>(
     block: u64,
 ) -> StdResult<Binary> {
     let new_rewards = query_pending(deps, block)?;
-    let balance: u128 = TypedStore::attach(&deps.storage).load(ACCUMULATED_REWARDS_KEY)?;
+    let balance: u128 = TypedStore::attach(&deps.storage)
+        .load(ACCUMULATED_REWARDS_KEY)
+        .unwrap_or(0);
 
     to_binary(&QueryAnswer::Balance {
         amount: Uint128(new_rewards + balance),
