@@ -120,7 +120,7 @@ fn notify_allocation<S: Storage, A: Api, Q: Querier>(
                     config.sefi.contract_hash,
                     config.sefi.address,
                 )?);
-            },
+            }
         }
     }
     balance_store.store(ACCUMULATED_REWARDS_KEY, &balance)?;
@@ -162,7 +162,7 @@ fn change_admin<S: Storage, A: Api, Q: Querier>(
     let mut config_store = TypedStoreMut::attach(&mut deps.storage);
     let mut config: Config = config_store.load(CONFIG_KEY)?;
 
-    enforce_admin(config.clone(), env)?;
+    enforce_admin(&config, &env)?;
 
     config.admin = address;
     config_store.store(CONFIG_KEY, &config)?;
@@ -182,7 +182,7 @@ fn change_beneficiary<S: Storage, A: Api, Q: Querier>(
     let mut config_store = TypedStoreMut::attach(&mut deps.storage);
     let mut config: Config = config_store.load(CONFIG_KEY)?;
 
-    enforce_admin(config.clone(), env)?;
+    enforce_admin(&config, &env)?;
 
     config.beneficiary = address;
     config_store.store(CONFIG_KEY, &config)?;
@@ -202,7 +202,7 @@ fn refresh_balance<S: Storage, A: Api, Q: Querier>(
     env: Env,
 ) -> StdResult<HandleResponse> {
     let config: Config = TypedStore::attach(&deps.storage).load(CONFIG_KEY)?;
-    enforce_admin(config.clone(), env.clone())?;
+    enforce_admin(&config, &env)?;
 
     let balance = snip20::balance_query(
         &deps.querier,
@@ -248,7 +248,7 @@ fn query_sefi<S: Storage, A: Api, Q: Querier>(deps: &Extern<S, A, Q>) -> StdResu
 
 // Helper functions
 
-fn enforce_admin(config: Config, env: Env) -> StdResult<()> {
+fn enforce_admin(config: &Config, env: &Env) -> StdResult<()> {
     if config.admin != env.message.sender {
         return Err(StdError::generic_err(format!(
             "not an admin: {}",
