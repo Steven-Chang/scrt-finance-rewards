@@ -59,7 +59,7 @@ pub fn handle<S: Storage, A: Api, Q: Querier>(
             deps,
             env,
             amount.u128(),
-            hook.map(|h| from_binary(&h).unwrap()),
+            hook.map(|h| from_binary(&h)).transpose()?,
         ),
         HandleMsg::RefreshBalance {} => refresh_balance(deps, env),
     };
