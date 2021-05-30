@@ -87,29 +87,49 @@ fn notify_allocation<S: Storage, A: Api, Q: Querier>(
     amount: u128,
     hook: Option<HookMsg>,
 ) -> StdResult<HandleResponse> {
-    let config = TypedStore::<Config, S>::attach(&deps.storage).load(CONFIG_KEY)?;
+    let config: Config = TypedStore::attach(&deps.storage).load(CONFIG_KEY)?;
     if env.message.sender != config.master.address && env.message.sender != config.admin {
         return Err(StdError::unauthorized());
     }
 
-    let balance_store = TypedStore::attach(&deps.storage);
+    let mut balance_store = TypedStoreMut::attach(&mut deps.storage);
     let mut balance: u128 = balance_store.load(ACCUMULATED_REWARDS_KEY).unwrap_or(0); // If this is called for the first time, use 0
     balance += amount;
-    TypedStoreMut::attach(&mut deps.storage).store(ACCUMULATED_REWARDS_KEY, &balance)?;
 
-    let mut response = Ok(HandleResponse {
-        messages: vec![],
-        log: vec![],
-        data: None,
-    });
-
+    let mut messages = vec![];
     if let Some(hook_msg) = hook {
-        response = match hook_msg {
-            HookMsg::Redeem { to, amount } => redeem_hook(deps, env, config, balance, to, amount),
+        match hook_msg {
+            HookMsg::Redeem { to, amount } => {
+                let amount = amount.unwrap_or(Uint128(balance)).u128();
+
+                if amount > balance {
+                    return Err(StdError::generic_err(format!(
+                        "insufficient funds to redeem: balance={}, required={}",
+                        balance, amount,
+                    )));
+                }
+
+                // NOTE: If no amount was specified, we redeem everything because `amount == balance`
+                balance -= amount;
+
+                messages.push(secret_toolkit::snip20::transfer_msg(
+                    to,
+                    Uint128(amount),
+                    None,
+                    RESPONSE_BLOCK_SIZE,
+                    config.sefi.contract_hash,
+                    config.sefi.address,
+                )?);
+            },
         }
     }
+    balance_store.store(ACCUMULATED_REWARDS_KEY, &balance)?;
 
-    response
+    Ok(HandleResponse {
+        messages,
+        log: vec![],
+        data: Some(to_binary(&HandleAnswer::Redeem { status: Success })?),
+    })
 }
 
 fn redeem<S: Storage, A: Api, Q: Querier>(
@@ -132,40 +152,6 @@ fn redeem<S: Storage, A: Api, Q: Querier>(
             amount,
         })?),
     )
-}
-
-fn redeem_hook<S: Storage, A: Api, Q: Querier>(
-    deps: &mut Extern<S, A, Q>,
-    _env: Env,
-    config: Config,
-    balance: u128,
-    to: HumanAddr,
-    amount: Option<Uint128>,
-) -> StdResult<HandleResponse> {
-    let amount = amount.unwrap_or(Uint128(balance)).u128();
-
-    if amount > balance {
-        return Err(StdError::generic_err(format!(
-            "insufficient funds to redeem: balance={}, required={}",
-            balance, amount,
-        )));
-    }
-
-    let new_balance = balance - amount;
-    TypedStoreMut::attach(&mut deps.storage).store(ACCUMULATED_REWARDS_KEY, &new_balance)?;
-
-    Ok(HandleResponse {
-        messages: vec![secret_toolkit::snip20::transfer_msg(
-            to,
-            Uint128(amount),
-            None,
-            RESPONSE_BLOCK_SIZE,
-            config.sefi.contract_hash,
-            config.sefi.address,
-        )?],
-        log: vec![],
-        data: Some(to_binary(&HandleAnswer::Redeem { status: Success })?),
-    })
 }
 
 fn change_admin<S: Storage, A: Api, Q: Querier>(
