@@ -58,6 +58,8 @@ pub enum HookMsg {
 pub enum QueryMsg {
     Sefi {},
     Balance { block: u64 },
+    Admin {},
+    Beneficiary {},
 }
 
 #[derive(Serialize, Deserialize, JsonSchema, Debug)]
@@ -65,6 +67,8 @@ pub enum QueryMsg {
 pub enum QueryAnswer {
     Balance { amount: Uint128 },
     Sefi { sefi: SecretContract },
+    Admin { address: HumanAddr },
+    Beneficiary { address: HumanAddr },
 }
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, JsonSchema, Debug)]

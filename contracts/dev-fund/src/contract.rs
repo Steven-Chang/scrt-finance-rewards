@@ -74,6 +74,8 @@ pub fn query<S: Storage, A: Api, Q: Querier>(
     let response = match msg {
         QueryMsg::Sefi {} => query_sefi(deps),
         QueryMsg::Balance { block } => query_balance(deps, block),
+        QueryMsg::Admin {} => query_admin(deps),
+        QueryMsg::Beneficiary {} => query_beneficiary(deps),
     };
 
     pad_query_result(response, RESPONSE_BLOCK_SIZE)
@@ -244,6 +246,22 @@ fn query_sefi<S: Storage, A: Api, Q: Querier>(deps: &Extern<S, A, Q>) -> StdResu
     let config: Config = TypedStore::attach(&deps.storage).load(CONFIG_KEY)?;
 
     to_binary(&QueryAnswer::Sefi { sefi: config.sefi })
+}
+
+fn query_admin<S: Storage, A: Api, Q: Querier>(deps: &Extern<S, A, Q>) -> StdResult<Binary> {
+    let config: Config = TypedStore::attach(&deps.storage).load(CONFIG_KEY)?;
+
+    to_binary(&QueryAnswer::Admin {
+        address: config.admin,
+    })
+}
+
+fn query_beneficiary<S: Storage, A: Api, Q: Querier>(deps: &Extern<S, A, Q>) -> StdResult<Binary> {
+    let config: Config = TypedStore::attach(&deps.storage).load(CONFIG_KEY)?;
+
+    to_binary(&QueryAnswer::Beneficiary {
+        address: config.beneficiary,
+    })
 }
 
 // Helper functions
