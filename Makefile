@@ -34,8 +34,6 @@ start-server: # CTRL+C to stop
 		-v $$(pwd):/root/code \
 		--name secretdev enigmampc/secret-network-sw-dev:latest
 
-
-
 clean:
 	cargo clean
 	rm -f ./build/*
